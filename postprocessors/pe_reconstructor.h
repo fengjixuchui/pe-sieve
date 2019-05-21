@@ -7,11 +7,12 @@
 #include "peconv.h"
 #include "../scanners/artefact_scanner.h"
 
-
 template <typename IMAGE_OPTIONAL_HEADER_T>
 bool overwrite_opt_hdr(BYTE* vBuf, size_t vBufSize, IMAGE_OPTIONAL_HEADER_T* opt_hdr_ptr, PeArtefacts &artefacts)
 {
+#ifdef _DEBUG
 	std::cout << "Trying to overwrite the optional header\n";
+#endif
 	if (!vBuf || !opt_hdr_ptr) return false;
 	if (!peconv::validate_ptr(vBuf, vBufSize, opt_hdr_ptr, sizeof(IMAGE_OPTIONAL_HEADER_T))) {
 		return false;
@@ -32,14 +33,16 @@ bool overwrite_opt_hdr(BYTE* vBuf, size_t vBufSize, IMAGE_OPTIONAL_HEADER_T* opt
 	if (opt_hdr_ptr->SizeOfHeaders > PAGE_SIZE) {
 		opt_hdr_ptr->SizeOfHeaders = 0x400; //typical header size
 	}
-	opt_hdr_ptr->SizeOfImage = artefacts.calculatedImgSize;
+	if (opt_hdr_ptr->SizeOfImage < artefacts.calculatedImgSize) {
+		opt_hdr_ptr->SizeOfImage = artefacts.calculatedImgSize;
+	}
 	return true;
 }
 
 class PeReconstructor {
 public:
 	PeReconstructor(PeArtefacts _artefacts, peconv::t_pe_dump_mode &dump_mode)
-		: artefacts(_artefacts),
+		: origArtefacts(_artefacts),
 		vBuf(nullptr), vBufSize(0), moduleBase(0), dumpMode(dump_mode)
 	{
 	}
@@ -52,7 +55,7 @@ public:
 	bool dumpToFile(IN std::string dumpFileName, IN OPTIONAL peconv::ExportsMapper* exportsMap = nullptr);
 
 protected:
-	bool findIAT(IN peconv::ExportsMapper* exportsMap);
+	bool findIAT(IN peconv::ExportsMapper* exportsMap, size_t start_offset);
 	bool findImportTable(IN peconv::ExportsMapper* exportsMap);
 
 	void freeBuffer() {
@@ -64,8 +67,11 @@ protected:
 
 	bool reconstructFileHdr();
 	bool reconstructPeHdr();
-	bool reconstructSectionsHdr(HANDLE processHandle);
+	bool fixSectionsVirtualSize(HANDLE processHandle);
 
+	size_t shiftPeHeader();
+
+	const PeArtefacts origArtefacts;
 	PeArtefacts artefacts;
 	BYTE *vBuf;
 	size_t vBufSize;

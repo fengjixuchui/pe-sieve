@@ -5,9 +5,69 @@
 #include "iat_finder.h"
 
 //---
+inline bool shift_artefacts(PeArtefacts& artefacts, size_t shift_size)
+{
+	artefacts.ntFileHdrsOffset += shift_size;
+	artefacts.secHdrsOffset += shift_size;
+	return true;
+}
+
+//WARNING: this function shifts also offsets saved in the artefacts
+size_t PeReconstructor::shiftPeHeader()
+{
+	if (!this->artefacts.hasNtHdrs()) return 0;
+
+	const size_t dos_pe_size = sizeof(IMAGE_DOS_HEADER) + sizeof(IMAGE_NT_SIGNATURE);
+	size_t diff = this->artefacts.ntFileHdrsOffset - this->artefacts.peBaseOffset;
+	if (diff >= dos_pe_size) {
+		return 0;
+	}
+	//TODO: shift the header
+	if (!this->artefacts.hasSectionHdrs()) return 0; //cannot proceed
+
+	size_t shift_size = dos_pe_size - diff;
+	size_t hdrs_end = this->artefacts.secHdrsOffset + (this->artefacts.secCount + 1)* sizeof(IMAGE_SECTION_HEADER);
+	if (!peconv::is_padding(vBuf + hdrs_end, shift_size, 0)) {
+		return 0; // no empty space, cannot proceed
+	}
+	size_t hdrs_size = hdrs_end - this->artefacts.peBaseOffset;
+	BYTE *new_nt_ptr = vBuf + this->artefacts.peBaseOffset + shift_size;
+	if (!peconv::validate_ptr(vBuf, vBufSize, new_nt_ptr, hdrs_size)) {
+		return 0;
+	}
+
+	size_t pe_offset = (this->artefacts.ntFileHdrsOffset - sizeof(IMAGE_NT_SIGNATURE)) - this->artefacts.peBaseOffset;
+
+	IMAGE_DOS_HEADER dos_template = { 0 };
+	dos_template.e_magic = IMAGE_DOS_SIGNATURE;
+	dos_template.e_lfanew = pe_offset + shift_size;
+
+	//check mz signature:
+	BYTE *mz_ptr = vBuf + this->artefacts.peBaseOffset;
+	if (!peconv::validate_ptr(vBuf, vBufSize, mz_ptr, sizeof(IMAGE_DOS_HEADER))) {
+		return 0;
+	}
+	//check PE signature:
+	DWORD* pe_ptr = (DWORD*)(vBuf + this->artefacts.peBaseOffset + dos_template.e_lfanew);
+	if (!peconv::validate_ptr(vBuf, vBufSize, pe_ptr, sizeof(DWORD))) {
+		return false;
+	}
+	//all checks passed, do the actual headers shift:
+	memmove(new_nt_ptr, (vBuf + this->artefacts.peBaseOffset), hdrs_size);
+
+	//write the DOS header:
+	memcpy(mz_ptr, &dos_template, sizeof(IMAGE_DOS_HEADER));
+
+	//write the PE signature:
+	*pe_ptr = IMAGE_NT_SIGNATURE;
+
+	shift_artefacts(this->artefacts, shift_size);
+	return shift_size;
+}
 
 bool PeReconstructor::reconstruct(IN HANDLE processHandle, IN OPTIONAL peconv::ExportsMapper* exportsMap)
 {
+	this->artefacts = origArtefacts;
 	freeBuffer();
 
 	this->moduleBase = artefacts.regionStart + artefacts.peBaseOffset;
@@ -22,27 +82,28 @@ bool PeReconstructor::reconstruct(IN HANDLE processHandle, IN OPTIONAL peconv::E
 	}
 	this->vBufSize = pe_vsize;
 
-	bool is_ok = false;
-
 	size_t read_size = peconv::read_remote_area(processHandle, (BYTE*)moduleBase, vBuf, pe_vsize);
 	if (read_size == 0) {
 		freeBuffer();
 		return false;
 	}
 
-	//do not modify section headers if the PE is in raw format, or no unmapping requested
-	if (!peconv::is_pe_raw(vBuf, pe_vsize)) {
-		if (!reconstructSectionsHdr(processHandle)) {
-			return false;
-		}
+	size_t shift_size = shiftPeHeader();
+	if (shift_size) {
+		std::cout << "[!] The PE header was shifted by: " << std::hex << shift_size << std::endl;
 	}
-
 	bool is_pe_hdr = false;
 	if (this->artefacts.hasNtHdrs() && reconstructFileHdr()) {
 		is_pe_hdr = reconstructPeHdr();
 	}
 	if (!is_pe_hdr) {
 		return false;
+	}
+	//do not modify section headers if the PE is in raw format, or no unmapping requested
+	if (!peconv::is_pe_raw(vBuf, pe_vsize)) {
+		if (!fixSectionsVirtualSize(processHandle)) {
+			return false;
+		}
 	}
 	if (exportsMap) {
 		std::cout << "[*] Trying to find ImportTable for module: " << std::hex << (ULONGLONG)this->moduleBase << "\n";
@@ -57,13 +118,9 @@ bool PeReconstructor::reconstruct(IN HANDLE processHandle, IN OPTIONAL peconv::E
 	return true;
 }
 
-bool PeReconstructor::reconstructSectionsHdr(HANDLE processHandle)
+bool PeReconstructor::fixSectionsVirtualSize(HANDLE processHandle)
 {
-	if (!this->vBuf) {
-		return false;
-	}
-
-	if (!this->artefacts.hasSectionHdrs()) {
+	if (!this->vBuf || !this->artefacts.hasSectionHdrs()) {
 		return false;
 	}
 
@@ -128,7 +185,7 @@ bool PeReconstructor::reconstructFileHdr()
 	BYTE* loadedData = this->vBuf;
 	size_t loadedSize = this->vBufSize;
 
-	ULONGLONG nt_offset = this->artefacts.ntFileHdrsOffset - this->artefacts.peBaseOffset;
+	size_t nt_offset = this->artefacts.ntFileHdrsOffset - this->artefacts.peBaseOffset;
 	BYTE* nt_ptr = (BYTE*)((ULONGLONG)this->vBuf + nt_offset);
 	if (is_valid_file_hdr(this->vBuf, this->vBufSize, nt_ptr, 0)) {
 		return true;
@@ -156,7 +213,6 @@ bool PeReconstructor::reconstructFileHdr()
 		hdr_candidate->NumberOfSections = WORD(this->artefacts.secCount);
 		hdr_candidate->SizeOfOptionalHeader = WORD(calc_offset);
 	}
-
 
 	hdr_candidate->NumberOfSymbols = 0;
 	hdr_candidate->PointerToSymbolTable = 0;
@@ -209,25 +265,39 @@ bool PeReconstructor::reconstructPeHdr()
 bool PeReconstructor::dumpToFile(std::string dumpFileName, _In_opt_ peconv::ExportsMapper* exportsMap)
 {
 	if (vBuf == nullptr) return false;
+
+	bool is_dumped = false;
+	if (dumpMode == peconv::PE_DUMP_AUTO) {
+		bool is_raw_alignment_valid = peconv::is_valid_sectons_alignment(vBuf, vBufSize, true);
+		bool is_virtual_alignment_valid = peconv::is_valid_sectons_alignment(vBuf, vBufSize, false);
+#ifdef _DEBUG
+		std::cout << "Is raw alignment valid: " << is_raw_alignment_valid << std::endl;
+		std::cout << "Is virtual alignment valid: " << is_virtual_alignment_valid << std::endl;
+#endif
+		if (!is_raw_alignment_valid && is_virtual_alignment_valid) {
+			//in case if raw alignment is invalid and virtual valid, try to dump using Virtual Alignment first
+			dumpMode = peconv::PE_DUMP_REALIGN;
+			is_dumped = peconv::dump_pe(dumpFileName.c_str(), vBuf, vBufSize, moduleBase, dumpMode, exportsMap);
+			if (is_dumped) {
+				return is_dumped;
+			}
+			is_dumped = peconv::PE_DUMP_AUTO; //revert and try again
+		}
+	}
 	// save the read module into a file
 	return peconv::dump_pe(dumpFileName.c_str(), vBuf, vBufSize, moduleBase, dumpMode, exportsMap);
 }
 
-bool PeReconstructor::findIAT(IN peconv::ExportsMapper* exportsMap)
+bool PeReconstructor::findIAT(IN peconv::ExportsMapper* exportsMap, size_t start_offset)
 {
 	IMAGE_DATA_DIRECTORY *dir = peconv::get_directory_entry(vBuf, IMAGE_DIRECTORY_ENTRY_IAT, true);
 	if (!dir) {
 		return false;
 	}
-	BYTE* iat_ptr = nullptr;
-	size_t iat_size = 0;
+	
 	bool is64bit = peconv::is64bit(vBuf);
-	if (is64bit) {
-		iat_ptr = find_iat<ULONGLONG>(vBuf, vBufSize, exportsMap, iat_size, 0);
-	}
-	else {
-		iat_ptr = find_iat<DWORD>(vBuf, vBufSize, exportsMap, iat_size, 0);
-	}
+	size_t iat_size = 0;
+	BYTE* iat_ptr = find_iat(is64bit, vBuf, vBufSize, exportsMap, iat_size, start_offset);;
 	
 	if (!iat_ptr) return false;
 
@@ -238,7 +308,9 @@ bool PeReconstructor::findIAT(IN peconv::ExportsMapper* exportsMap)
 		//std::cout << "[+] Validated IAT data!\n";
 		return true;
 	}
-	//std::cout << "[!] Overwriting IAT data!\n";
+	if (iat_offset != dir->VirtualAddress) {
+		std::cout << "[!] Overwriting IAT address!\n";
+	}
 	dir->VirtualAddress = iat_offset;
 	dir->Size = iat_size;
 	return true;
@@ -254,18 +326,25 @@ bool PeReconstructor::findImportTable(IN peconv::ExportsMapper* exportsMap)
 	if (!iat_dir) {
 		return false;
 	}
-	//if (iat_dir->VirtualAddress == 0) {
-		if (!findIAT(exportsMap)) return false;
-	//}
-	DWORD iat_offset = iat_dir->VirtualAddress;
 
-	//std::cout << "Searching import table\n";
-	size_t table_size = 0;
-	
 	IMAGE_IMPORT_DESCRIPTOR* import_table = nullptr;
-	bool is64bit = peconv::is64bit(vBuf);
-	if (is64bit) {
-		import_table = find_import_table<ULONGLONG>(
+	size_t table_size = 0;
+
+	for (size_t search_offset = 0; search_offset < vBufSize;) {
+		//if (iat_dir->VirtualAddress == 0) {
+		
+		if (!findIAT(exportsMap, search_offset)) {
+			//can't find any more IAT
+			return false;
+		}
+		//}
+		const DWORD iat_offset = iat_dir->VirtualAddress;
+		const size_t iat_end = iat_offset + iat_dir->Size;
+		std::cout << "[*] Searching import table for IAT: " << std::hex << iat_offset << ", size: " << iat_dir->Size << std::endl;
+		
+		bool is64bit = peconv::is64bit(vBuf);
+		import_table = find_import_table(
+			is64bit,
 			vBuf,
 			vBufSize,
 			exportsMap,
@@ -273,16 +352,13 @@ bool PeReconstructor::findImportTable(IN peconv::ExportsMapper* exportsMap)
 			table_size,
 			0 //start offset
 		);
-	}
-	else {
-		import_table = find_import_table<DWORD>(
-			vBuf,
-			vBufSize,
-			exportsMap,
-			iat_offset,
-			table_size,
-			0 //start offset
-			);
+		if (import_table) break; //import table found!
+
+		// next search should be after thie current IAT:
+		if (iat_end <= search_offset) {
+			break; //this should never happen
+		}
+		search_offset = iat_end;
 	}
 
 	if (!import_table) return false;
@@ -294,10 +370,11 @@ bool PeReconstructor::findImportTable(IN peconv::ExportsMapper* exportsMap)
 		//std::cout << "[*] Validated Imports offset!\n";
 		return true;
 	}
+#ifdef _DEBUG
 	if (imp_dir->Size == table_size) {
-		//std::cout << "[*] Validated Imports size!\n";
-		return true;
+		std::cout << "[*] Validated Imports size!\n";
 	}
+#endif
 	//std::cout << "[+] Overwriting Imports data!\n";
 	imp_dir->VirtualAddress = imp_offset;
 	imp_dir->Size = table_size;
