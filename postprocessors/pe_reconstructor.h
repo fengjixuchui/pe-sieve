@@ -3,8 +3,9 @@
 #include <Windows.h>
 #include <Psapi.h>
 #include <map>
+#include <peconv.h>
 
-#include "peconv.h"
+#include "pe_buffer.h"
 #include "../scanners/artefact_scanner.h"
 
 template <typename IMAGE_OPTIONAL_HEADER_T>
@@ -41,41 +42,22 @@ bool overwrite_opt_hdr(BYTE* vBuf, size_t vBufSize, IMAGE_OPTIONAL_HEADER_T* opt
 
 class PeReconstructor {
 public:
-	PeReconstructor(PeArtefacts _artefacts, peconv::t_pe_dump_mode &dump_mode)
-		: origArtefacts(_artefacts),
-		vBuf(nullptr), vBufSize(0), moduleBase(0), dumpMode(dump_mode)
+	PeReconstructor(PeArtefacts _artefacts, PeBuffer &_peBuffer)
+		: origArtefacts(_artefacts), peBuffer(_peBuffer)
 	{
 	}
 
-	~PeReconstructor() {
-		freeBuffer();
-	}
-
-	bool reconstruct(IN HANDLE processHandle, IN OPTIONAL peconv::ExportsMapper* exportsMap = nullptr);
-	bool dumpToFile(IN std::string dumpFileName, IN OPTIONAL peconv::ExportsMapper* exportsMap = nullptr);
+	bool reconstruct(IN HANDLE processHandle);
 
 protected:
-	bool findIAT(IN peconv::ExportsMapper* exportsMap, size_t start_offset);
-	bool findImportTable(IN peconv::ExportsMapper* exportsMap);
-
-	void freeBuffer() {
-		peconv::free_aligned(vBuf);
-		vBuf = nullptr;
-		vBufSize = 0;
-		moduleBase = 0;
-	}
-
 	bool reconstructFileHdr();
 	bool reconstructPeHdr();
 	bool fixSectionsVirtualSize(HANDLE processHandle);
+	bool fixSectionsCharacteristics(HANDLE processHandle);
 
 	size_t shiftPeHeader();
 
 	const PeArtefacts origArtefacts;
 	PeArtefacts artefacts;
-	BYTE *vBuf;
-	size_t vBufSize;
-	ULONGLONG moduleBase;
-
-	peconv::t_pe_dump_mode &dumpMode;
+	PeBuffer &peBuffer;
 };

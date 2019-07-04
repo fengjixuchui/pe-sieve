@@ -3,15 +3,15 @@
 #include <Windows.h>
 #include <map>
 
-#include "peconv.h"
+#include <peconv.h>
 #include "scan_report.h"
 
 #include "module_data.h"
 
 class ProcessScanner {
 public:
-	ProcessScanner(HANDLE procHndl, t_params _args)
-		: args(_args)
+	ProcessScanner(HANDLE procHndl, pesieve::t_params _args)
+		: args(_args), isDEP(false)
 	{
 		this->processHandle = procHndl;
 	}
@@ -33,7 +33,8 @@ protected:
 	bool resolveHooksTargets(ProcessScanReport& process_report);
 
 	HANDLE processHandle;
+	bool isDEP;
 	size_t hModsMax;
-	t_params args;
+	pesieve::t_params args;
 };
 

@@ -50,18 +50,32 @@ set (scanners_hdrs
 	scanners/hook_targets_resolver.h
 )
 
+set (imprec_hdrs
+	postprocessors/imp_rec/imp_reconstructor.h
+	postprocessors/imp_rec/iat_block.h
+	postprocessors/imp_rec/iat_finder.h
+	postprocessors/imp_rec/import_table_finder.h
+)
+
 set (postprocessors_hdrs
 	postprocessors/report_formatter.h
 	postprocessors/results_dumper.h
+	postprocessors/pe_buffer.h
 	postprocessors/pe_reconstructor.h
-	postprocessors/iat_finder.h
+)
+
+set (imprec_srcs
+	postprocessors/imp_rec/imp_reconstructor.cpp
+	postprocessors/imp_rec/iat_block.cpp
+	postprocessors/imp_rec/iat_finder.cpp
+	postprocessors/imp_rec/import_table_finder.cpp
 )
 
 set (postprocessors_srcs
 	postprocessors/report_formatter.cpp
 	postprocessors/results_dumper.cpp
+	postprocessors/pe_buffer.cpp
 	postprocessors/pe_reconstructor.cpp
-	postprocessors/iat_finder.cpp
 )
 
 set (utils_srcs
@@ -82,21 +96,31 @@ set (utils_hdrs
 	utils/artefacts_util.h
 )
 
+set (params_info_hdrs
+	params_info/pe_sieve_params_info.h
+)
+
+set (params_info_srcs
+	params_info/pe_sieve_params_info.cpp
+)
+
 set (srcs
 	pe_sieve.cpp
-	pe_sieve_params_info.cpp
 	color_scheme.h
+	${params_info_srcs}
 	${scanners_srcs}
 	${postprocessors_srcs}
+	${imprec_srcs}
 	${utils_srcs}
 )
 
 set (hdrs
 	pe_sieve.h
-	pe_sieve_params_info.h
 	include/pe_sieve_types.h
+	${params_info_hdrs}
 	${scanners_hdrs}
 	${postprocessors_hdrs}
+	${imprec_hdrs}
 	${utils_hdrs}
 )
 
@@ -113,8 +137,14 @@ SOURCE_GROUP("Header Files\\scanners" FILES ${scanners_hdrs} )
 SOURCE_GROUP("Source Files\\utils" FILES ${utils_srcs} )
 SOURCE_GROUP("Header Files\\utils" FILES ${utils_hdrs} )
 
+SOURCE_GROUP("Source Files\\params_info" FILES ${params_info_srcs} )
+SOURCE_GROUP("Header Files\\params_info" FILES ${params_info_hdrs} )
+
 SOURCE_GROUP("Source Files\\postprocessors" FILES ${postprocessors_srcs} )
 SOURCE_GROUP("Header Files\\postprocessors" FILES ${postprocessors_hdrs} )
+
+SOURCE_GROUP("Source Files\\postprocessors\\imp_rec" FILES ${imprec_srcs} )
+SOURCE_GROUP("Header Files\\postprocessors\\imp_rec" FILES ${imprec_hdrs} )
 
 # libs
 add_subdirectory (libpeconv/libpeconv)

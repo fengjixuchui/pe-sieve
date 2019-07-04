@@ -1,6 +1,6 @@
 #include "code_scanner.h"
 
-#include "peconv.h"
+#include <peconv.h>
 
 #include "patch_analyzer.h"
 #include "../utils/artefacts_util.h"
@@ -43,6 +43,46 @@ bool CodeScanner::clearIAT(PeSection &originalSec, PeSection &remoteSec)
 		memset(originalSec.loadedSection + offset, 0, iat_size);
 		memset(remoteSec.loadedSection + offset, 0, iat_size);
 	}
+	return true;
+}
+
+bool CodeScanner::clearLoadConfig(PeSection &originalSec, PeSection &remoteSec)
+{
+	// check if the Guard flag is enabled:
+	WORD charact = peconv::get_dll_characteristics(moduleData.original_module);
+	if ((charact & 0x4000) == 0) {
+		return false; //no guard flag
+	}
+	BYTE *ldconf_ptr = peconv::get_load_config_ptr(moduleData.original_module, moduleData.original_size);
+	if (!ldconf_ptr) return false;
+
+	peconv::t_load_config_ver ver = peconv::get_load_config_version(moduleData.original_module, moduleData.original_size, ldconf_ptr);
+	if (ver != peconv::LOAD_CONFIG_W8_VER && ver != peconv::LOAD_CONFIG_W10_VER) {
+		return false; // nothing to cleanup
+	}
+	ULONGLONG cflag_va = 0;
+	size_t field_size = 0;
+	if (this->moduleData.is64bit()) {
+		peconv::IMAGE_LOAD_CONFIG_DIR64_W8* ldc = (peconv::IMAGE_LOAD_CONFIG_DIR64_W8*) ldconf_ptr;
+		cflag_va = ldc->GuardCFCheckFunctionPointer;
+		field_size = sizeof(ULONGLONG);
+	}
+	else {
+		peconv::IMAGE_LOAD_CONFIG_DIR32_W8* ldc = (peconv::IMAGE_LOAD_CONFIG_DIR32_W8*) ldconf_ptr;
+		cflag_va = ldc->GuardCFCheckFunctionPointer;
+		field_size = sizeof(DWORD);
+	}
+	if (cflag_va == 0) return false;
+
+	const ULONGLONG module_base = (ULONG_PTR)moduleData.moduleHandle;
+	const ULONGLONG cflag_rva = cflag_va - module_base;
+	if (!originalSec.isContained(cflag_rva, field_size)) {
+		return false;
+	}
+	//clear the field:
+	size_t sec_offset = size_t(cflag_rva - originalSec.rva);
+	memset(originalSec.loadedSection + sec_offset, 0, field_size);
+	memset(remoteSec.loadedSection + sec_offset, 0, field_size);
 	return true;
 }
 
@@ -124,6 +164,7 @@ t_scan_status CodeScanner::scanSection(PeSection &originalSec, PeSection &remote
 	}
 	clearIAT(originalSec, remoteSec);
 	clearExports(originalSec, remoteSec);
+	clearLoadConfig(originalSec, remoteSec);
 	//TODO: handle sections that have inside Delayed Imports (they give false positives)
 
 	size_t smaller_size = originalSec.loadedSize > remoteSec.loadedSize ? remoteSec.loadedSize : originalSec.loadedSize;

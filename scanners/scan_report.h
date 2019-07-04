@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <peconv.h>
 #include "pe_sieve_types.h"
-#include "peconv.h"
 #include "module_scan_report.h"
 #include "scanned_modules.h"
 
@@ -64,13 +64,12 @@ public:
 		return true;
 	}
 
-	t_report generateSummary() const;
+	pesieve::t_report generateSummary() const;
 	DWORD getPid() { return pid; }
 
 	std::string mainImagePath;
 	std::vector<ModuleScanReport*> module_reports; //TODO: make it protected
 	peconv::ExportsMapper *exportsMap;
-
 
 protected:
 	void deleteModuleReports()

@@ -3,8 +3,7 @@
 #include "../utils/artefacts_util.h"
 #include "../utils/workingset_enum.h"
 
-#include "peconv.h"
-#include "peconv/fix_imports.h"
+#include <peconv.h>
 
 size_t calc_offset(MemPageData &memPage, LPVOID field)
 {
@@ -127,10 +126,12 @@ size_t ArtefactScanner::calcImageSize(MemPageData &memPage, IMAGE_SECTION_HEADER
 		return 0;
 	}
 
+	const ULONGLONG main_base = peconv::fetch_alloc_base(this->processHandle, (PBYTE)pe_image_base);
+
 	for (IMAGE_SECTION_HEADER* curr_sec = hdr_ptr; ; curr_sec++)
 	{
-		if (!peconv::validate_ptr(memPage.getLoadedData(), memPage.getLoadedSize(), curr_sec, sizeof(IMAGE_SECTION_HEADER))) {
-			// probably buffer finished
+		//we don't know the number of sections, so we should validate each one
+		if (!is_valid_section(memPage.getLoadedData(), memPage.getLoadedSize(), (BYTE*)curr_sec, 0)) {
 			break;
 		}
 		if (curr_sec->Misc.VirtualSize == 0) {
@@ -142,6 +143,11 @@ size_t ArtefactScanner::calcImageSize(MemPageData &memPage, IMAGE_SECTION_HEADER
 		size_t next_last_sec_size = peconv::fetch_region_size(this->processHandle, (PBYTE)last_sec_va);
 		if (next_last_sec_size == 0) {
 			break; //the section was invalid, skip it
+		}
+		ULONGLONG region_base = peconv::fetch_alloc_base(this->processHandle, (PBYTE)last_sec_va);
+		if (region_base != main_base) {
+			std::cout << "[!] Mismatch: region_base : " << std::hex << region_base << " while main base: " << main_base << "\n";
+			break; // out of scope
 		}
 		max_addr = next_max_addr;
 		last_sec_size = next_last_sec_size;
@@ -487,7 +493,7 @@ PeArtefacts* ArtefactScanner::findArtefacts(MemPageData &memPage, size_t start_o
 		ArtefactsMapping aMap(memPage, this->is64bit);
 		if (findMzPe(aMap, min_offset)) {
 			size_t dos_offset = calc_offset(memPage, aMap.dos_hdr);
-			min_offset = dos_offset != INVALID_OFFSET ? dos_offset : min_offset;
+			min_offset = (dos_offset != INVALID_OFFSET) ? dos_offset : min_offset;
 			//std::cout << "Setting minOffset: " << std::hex << min_offset << std::endl;
 		}
 		size_t max_section_search = memPage.getLoadedSize();
@@ -497,9 +503,13 @@ PeArtefacts* ArtefactScanner::findArtefacts(MemPageData &memPage, size_t start_o
 				min_offset = nt_offset;
 			}
 			//don't search in full module, only in the first mem page:
-			max_section_search = PAGE_SIZE < memPage.getLoadedSize() ? PAGE_SIZE : memPage.getLoadedSize();
+			max_section_search = (PAGE_SIZE < memPage.getLoadedSize()) ? PAGE_SIZE : memPage.getLoadedSize();
 		}
-		IMAGE_SECTION_HEADER *sec_hdr = findSectionsHdr(memPage, max_section_search - min_offset, min_offset);
+		if (max_section_search <= min_offset) {
+			continue;
+		}
+		const size_t diff = max_section_search - min_offset;
+		IMAGE_SECTION_HEADER *sec_hdr = findSectionsHdr(memPage, diff, min_offset);
 		if (sec_hdr) {
 			setSecHdr(aMap, sec_hdr);
 			size_t sec_offset = calc_offset(memPage, aMap.sec_hdr);

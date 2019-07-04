@@ -7,6 +7,7 @@
 #include "../utils/path_converter.h"
 #include "../utils/workingset_enum.h"
 #include "../utils/modules_enum.h"
+#include "../utils/process_privilege.h"
 
 #include "headers_scanner.h"
 #include "code_scanner.h"
@@ -21,6 +22,8 @@
 #include <Psapi.h>
 #pragma comment(lib,"psapi.lib")
 
+using namespace pesieve;
+
 t_scan_status ProcessScanner::scanForHollows(ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport& process_report)
 {
 	BOOL isWow64 = FALSE;
@@ -30,7 +33,7 @@ t_scan_status ProcessScanner::scanForHollows(ModuleData& modData, RemoteModuleDa
 	HeadersScanner hollows(processHandle, modData, remoteModData);
 	HeadersScanReport *scan_report = hollows.scanRemote();
 	if (scan_report == nullptr) {
-		process_report.appendReport(new MalformedHeaderReport(processHandle, modData.moduleHandle, modData.original_size));
+		process_report.appendReport(new MalformedHeaderReport(processHandle, modData.moduleHandle, modData.original_size, modData.szModName));
 		return SCAN_ERROR;
 	}
 	t_scan_status is_hollowed = ModuleScanReport::get_scan_status(scan_report);
@@ -45,6 +48,7 @@ t_scan_status ProcessScanner::scanForHollows(ModuleData& modData, RemoteModuleDa
 		}
 		is_hollowed = ModuleScanReport::get_scan_status(scan_report);
 	}
+	scan_report->moduleFile = modData.szModName;
 	process_report.appendReport(scan_report);
 	return is_hollowed;
 }
@@ -54,7 +58,11 @@ t_scan_status ProcessScanner::scanForHooks(ModuleData& modData, RemoteModuleData
 	CodeScanner hooks(processHandle, modData, remoteModData);
 
 	CodeScanReport *scan_report = hooks.scanRemote();
+	if (!scan_report) return SCAN_ERROR;
+
 	t_scan_status is_hooked = ModuleScanReport::get_scan_status(scan_report);
+
+	scan_report->moduleFile = modData.szModName;
 	process_report.appendReport(scan_report);
 	
 	if (is_hooked != SCAN_SUSPICIOUS) {
@@ -73,6 +81,7 @@ bool ProcessScanner::resolveHooksTargets(ProcessScanReport& process_report)
 
 ProcessScanReport* ProcessScanner::scanRemote()
 {
+	this->isDEP = is_DEP_enabled(this->processHandle);
 	ProcessScanReport *pReport = new ProcessScanReport(this->args.pid);
 
 	char image_buf[MAX_PATH] = { 0 };
@@ -144,8 +153,9 @@ size_t ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws excep
 		MemPageData memPage(this->processHandle, region_base);
 		//if it was already scanned, it means the module was on the list of loaded modules
 		memPage.is_listed_module = pReport.hasModule(region_base);
+		memPage.is_dep_enabled = this->isDEP;
 
-		WorkingSetScanner memPageScanner(this->processHandle, memPage, this->args.shellcode);
+		WorkingSetScanner memPageScanner(this->processHandle, memPage, this->args.shellcode, this->args.data);
 		WorkingSetScanReport *my_report = memPageScanner.scanRemote();
 
 		counter++;
@@ -189,7 +199,7 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 	if (modules_count == 0) {
 		return 0;
 	}
-	if (args.imp_rec) {
+	if (args.imprec_mode != PE_IMPREC_NONE) {
 		pReport.exportsMap = new peconv::ExportsMapper();
 	}
 
@@ -205,7 +215,7 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 		if (!modData.loadOriginal()) {
 			std::cout << "[!][" << args.pid <<  "] Suspicious: could not read the module file!" << std::endl;
 			//make a report that finding original module was not possible
-			pReport.appendReport(new UnreachableModuleReport(processHandle, hMods[counter], 0));
+			pReport.appendReport(new UnreachableModuleReport(processHandle, hMods[counter], 0, modData.szModName));
 			continue;
 		}
 		if (!args.quiet) {
@@ -216,14 +226,14 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 #ifdef _DEBUG
 			std::cout << "[*] Skipping a .NET module: " << modData.szModName << std::endl;
 #endif
-			pReport.appendReport(new SkippedModuleReport(processHandle, modData.moduleHandle, modData.original_size));
+			pReport.appendReport(new SkippedModuleReport(processHandle, modData.moduleHandle, modData.original_size, modData.szModName));
 			continue;
 		}
 		//load data about the remote module
 		RemoteModuleData remoteModData(processHandle, hMods[counter]);
 		if (remoteModData.isInitialized() == false) {
 			//make a report that initializing remote module was not possible
-			pReport.appendReport(new MalformedHeaderReport(processHandle, hMods[counter], 0));
+			pReport.appendReport(new MalformedHeaderReport(processHandle, hMods[counter], 0, modData.szModName));
 			continue;
 		}
 		t_scan_status is_hollowed = scanForHollows(modData, remoteModData, pReport);

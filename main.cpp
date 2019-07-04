@@ -9,16 +9,17 @@
 #include "utils/process_privilege.h"
 
 #include "utils/util.h"
-#include "pe_sieve_params_info.h"
 
-#include "peconv.h"
 #include "pe_sieve.h"
+#include "params_info/pe_sieve_params_info.h"
+
 #include "color_scheme.h"
 
 #define PARAM_SWITCH '/'
 //scan options:
 #define PARAM_PID "/pid"
 #define PARAM_SHELLCODE "/shellc"
+#define PARAM_DATA "/data"
 #define PARAM_MODULES_FILTER "/mfilter"
 //dump options:
 #define PARAM_IMP_REC "/imp"
@@ -33,6 +34,8 @@
 #define PARAM_HELP2  "/?"
 #define PARAM_VERSION  "/version"
 
+using namespace pesieve;
+
 void print_in_color(int color, std::string text)
 {
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -41,14 +44,6 @@ void print_in_color(int color, std::string text)
 	std::cout << text;
 	FlushConsoleInputBuffer(hConsole);
 	SetConsoleTextAttribute(hConsole, 7); // back to default color
-}
-
-peconv::t_pe_dump_mode normalize_dump_mode(size_t mode_id)
-{
-	if (mode_id > peconv::PE_DUMP_MODES_COUNT) {
-		return peconv::PE_DUMP_AUTO;
-	}
-	return (peconv::t_pe_dump_mode) mode_id;
 }
 
 void print_help()
@@ -65,6 +60,8 @@ void print_help()
 
 	print_in_color(param_color, PARAM_SHELLCODE);
 	std::cout << "\t: Detect shellcode implants. (By default it detects PE only).\n";
+	print_in_color(param_color, PARAM_DATA);
+	std::cout << "\t: If DEP is disabled scan also non-executable memory\n\t(which potentially can be executed).\n";
 #ifdef _WIN64
 	print_in_color(param_color, PARAM_MODULES_FILTER);
 	std::cout << " <*mfilter_id>\n\t: Filter the scanned modules.\n";
@@ -76,7 +73,13 @@ void print_help()
 
 	print_in_color(separator_color, "\n---dump options---\n");
 	print_in_color(param_color, PARAM_IMP_REC);
-	std::cout << "\t: Enable recovering imports.\n";
+	std::cout << " <*imprec_mode>\n\t: Set in which mode the ImportTable should be recovered.\n";;
+	std::cout << "*imprec_mode:\n";
+	for (size_t i = 0; i < PE_IMPREC_MODES_COUNT; i++) {
+		t_imprec_mode mode = (t_imprec_mode)(i);
+		std::cout << "\t" << mode << " - " << translate_imprec_mode(mode) << "\n";
+	}
+
 	print_in_color(param_color, PARAM_DUMP_MODE);
 	std::cout << " <*dump_mode>\n\t: Set in which mode the detected PE files should be dumped.\n";
 	std::cout << "*dump_mode:\n";
@@ -187,7 +190,14 @@ int main(int argc, char *argv[])
 			info_req = true;
 		}
 		else if (!strcmp(argv[i], PARAM_IMP_REC)) {
-			args.imp_rec = true;
+			args.imprec_mode = PE_IMPREC_AUTO;
+			if ((i + 1) < argc) {
+				char* mode_num = argv[i + 1];
+				if (isdigit(mode_num[0])) {
+					args.imprec_mode = normalize_imprec_mode(atoi(mode_num));
+					++i;
+				}
+			}
 		}
 		else if (!strcmp(argv[i], PARAM_OUT_FILTER) && (i + 1) < argc) {
 			args.out_filter = static_cast<t_output_filter>(atoi(argv[i + 1]));
@@ -205,7 +215,7 @@ int main(int argc, char *argv[])
 			++i;
 		}
 		else if (!strcmp(argv[i], PARAM_VERSION)) {
-			std::cout << PESIEVE_VERSION << std::endl;
+			std::cout << PESIEVE_VERSION << "\n";
 			info_req = true;
 		}
 		else if (!strcmp(argv[i], PARAM_QUIET)) {
@@ -216,6 +226,9 @@ int main(int argc, char *argv[])
 		}
 		else if (!strcmp(argv[i], PARAM_SHELLCODE)) {
 			args.shellcode = true;
+		}
+		else if (!strcmp(argv[i], PARAM_DATA)) {
+			args.data = true;
 		}
 		else if (!strcmp(argv[i], PARAM_DUMP_MODE) && (i + 1) < argc) {
 			args.dump_mode = normalize_dump_mode(atoi(argv[i + 1]));
