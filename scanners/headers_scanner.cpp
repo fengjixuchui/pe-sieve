@@ -45,15 +45,18 @@ HeadersScanReport* HeadersScanner::scanRemote()
 	zeroUnusedFields(hdr_buffer1, hdrs_size);
 	zeroUnusedFields(hdr_buffer2, hdrs_size);
 
-	if (isSecHdrModified(hdr_buffer1, hdr_buffer2, hdrs_size)) {
-		my_report->secHdrModified = true;
-	}
 	//compare:
-	if (memcmp(hdr_buffer1, hdr_buffer2, hdrs_size) != 0) {
-		my_report->status = SCAN_SUSPICIOUS;
+	if (memcmp(hdr_buffer1, hdr_buffer2, hdrs_size) == 0) {
+		my_report->status = SCAN_NOT_SUSPICIOUS;
 		return my_report;
 	}
-	my_report->status = SCAN_NOT_SUSPICIOUS;
+	//modifications detected, now find more details:
+	my_report->dosHdrModified = isDosHdrModified(hdr_buffer1, hdr_buffer2, hdrs_size);
+	my_report->fileHdrModified = isFileHdrModified(hdr_buffer1, hdr_buffer2, hdrs_size);
+	my_report->ntHdrModified = isNtHdrModified(hdr_buffer1, hdr_buffer2, hdrs_size);
+	my_report->secHdrModified = isSecHdrModified(hdr_buffer1, hdr_buffer2, hdrs_size);
+
+	my_report->status = SCAN_SUSPICIOUS;
 	return my_report;
 }
 
@@ -73,7 +76,25 @@ bool HeadersScanner::zeroUnusedFields(PBYTE hdr_buffer, size_t hdrs_size)
 	return is_modified;
 }
 
-bool HeadersScanner::isSecHdrModified(PBYTE hdr_buffer1, PBYTE hdr_buffer2, size_t hdrs_size)
+bool HeadersScanner::isDosHdrModified(const PBYTE hdr_buffer1, const PBYTE hdr_buffer2, const size_t hdrs_size)
+{
+	if (hdrs_size < sizeof(IMAGE_DOS_HEADER)) { //should never happen
+		return false;
+	}
+	IMAGE_DOS_HEADER* hdr1 = (IMAGE_DOS_HEADER*)hdr_buffer1;
+	IMAGE_DOS_HEADER* hdr2 = (IMAGE_DOS_HEADER*)hdr_buffer2;
+	if (memcmp(hdr1, hdr2, sizeof(IMAGE_DOS_HEADER)) != 0) {
+		return true;
+	}
+
+	LONG new_hdr = hdr2->e_lfanew;
+	if (memcmp(hdr1, hdr2, new_hdr) != 0) {
+		return true;
+	}
+	return false;
+}
+
+bool HeadersScanner::isSecHdrModified(const PBYTE hdr_buffer1, const PBYTE hdr_buffer2, const size_t hdrs_size)
 {
 	size_t section_num1 = peconv::get_sections_count(hdr_buffer1, hdrs_size);
 	size_t section_num2 = peconv::get_sections_count(hdr_buffer2, hdrs_size);
@@ -83,7 +104,7 @@ bool HeadersScanner::isSecHdrModified(PBYTE hdr_buffer1, PBYTE hdr_buffer2, size
 
 	for (size_t i = 0; i < section_num1; i++) {
 		PIMAGE_SECTION_HEADER sec_hdr1 = peconv::get_section_hdr(hdr_buffer1, hdrs_size, i);
-		PIMAGE_SECTION_HEADER sec_hdr2 = peconv::get_section_hdr(hdr_buffer1, hdrs_size, i);
+		PIMAGE_SECTION_HEADER sec_hdr2 = peconv::get_section_hdr(hdr_buffer2, hdrs_size, i);
 		if (!sec_hdr1 && !sec_hdr2) {
 			continue;
 		}
@@ -97,6 +118,51 @@ bool HeadersScanner::isSecHdrModified(PBYTE hdr_buffer1, PBYTE hdr_buffer2, size
 		if (sec_hdr1->Misc.VirtualSize != sec_hdr2->Misc.VirtualSize) {
 			return true;
 		}
+		if (sec_hdr1->PointerToRawData != sec_hdr2->PointerToRawData) {
+			return true;
+		}
 	}
 	return false;
+}
+
+bool HeadersScanner::isFileHdrModified(const PBYTE hdr_buffer1, const PBYTE hdr_buffer2, const size_t hdrs_size)
+{
+	const IMAGE_FILE_HEADER *file_hdr1 = peconv::get_file_hdr(hdr_buffer1, hdrs_size);
+	const IMAGE_FILE_HEADER *file_hdr2 = peconv::get_file_hdr(hdr_buffer2, hdrs_size);
+
+	if (!file_hdr1 && !file_hdr2) return false;
+	if (!file_hdr1 || !file_hdr2) return true;
+
+	if (memcmp(file_hdr1, file_hdr2, sizeof(IMAGE_NT_HEADERS64)) == 0) {
+		return false;
+	}
+	return true;
+}
+
+bool HeadersScanner::isNtHdrModified(const PBYTE hdr_buffer1, const PBYTE hdr_buffer2, const size_t hdrs_size)
+{
+	bool is64 = peconv::is64bit(hdr_buffer1);
+	if (peconv::is64bit(hdr_buffer2) != is64) {
+		return true;
+	}
+	BYTE *nt1 = peconv::get_nt_hrds(hdr_buffer1, hdrs_size);
+	BYTE *nt2 = peconv::get_nt_hrds(hdr_buffer2, hdrs_size);
+	if (!nt1 && !nt2) return false;
+	if (!nt1 || !nt2) return true;
+
+	if (is64) {
+		IMAGE_NT_HEADERS64* nt1_64 = (IMAGE_NT_HEADERS64*) nt1;
+		IMAGE_NT_HEADERS64* nt2_64 = (IMAGE_NT_HEADERS64*) nt2;
+		if (memcmp(nt1, nt2, sizeof(IMAGE_NT_HEADERS64)) == 0) {
+			return false;
+		}
+	}
+	else {
+		IMAGE_NT_HEADERS64* nt1_64 = (IMAGE_NT_HEADERS64*)nt1;
+		IMAGE_NT_HEADERS64* nt2_64 = (IMAGE_NT_HEADERS64*)nt2;
+		if (memcmp(nt1, nt2, sizeof(IMAGE_NT_HEADERS64)) == 0) {
+			return false;
+		}
+	}
+	return true;
 }
