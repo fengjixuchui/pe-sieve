@@ -46,6 +46,17 @@ public:
 		return this->peBaseOffset + this->regionStart;
 	}
 
+	ULONGLONG dropPeBase(const ULONGLONG offset_with_pe_base) const
+	{
+		if (peBaseOffset == INVALID_OFFSET || offset_with_pe_base == INVALID_OFFSET) {
+			return INVALID_OFFSET;
+		}
+		if (offset_with_pe_base < peBaseOffset) {
+			return INVALID_OFFSET;
+		}
+		return offset_with_pe_base - peBaseOffset;
+	}
+
 	const virtual bool fieldsToJSON(std::stringstream &outs, size_t level = JSON_LEVEL)
 	{
 		OUT_PADDED(outs, level, "\"pe_base_offset\" : ");
@@ -232,10 +243,14 @@ protected:
 	ULONGLONG calcPeBase(MemPageData &memPage, LPVOID hdr_ptr);
 	size_t calcImageSize(MemPageData &memPage, IMAGE_SECTION_HEADER *hdr_ptr, ULONGLONG pe_image_base);
 
-	IMAGE_FILE_HEADER* findNtFileHdr(BYTE* loadedData, size_t loadedSize);
-	BYTE* findSecByPatterns(BYTE *search_ptr, const size_t max_search_size);
-	IMAGE_SECTION_HEADER* findSectionsHdr(MemPageData &memPageData, const size_t max_search_size, const size_t search_offset);
+	IMAGE_FILE_HEADER* findNtFileHdr(MemPageData &memPage, const size_t start_offset, size_t stop_offset = INVALID_OFFSET);
+
+	BYTE* _findSecByPatterns(BYTE *search_ptr, const size_t max_search_size);
+	IMAGE_SECTION_HEADER* findSecByPatterns(MemPageData &memPageData, const size_t max_search_size, const size_t search_offset);
+
 	IMAGE_DOS_HEADER* findMzPeHeader(MemPageData &memPage, const size_t search_offset);
+	IMAGE_DOS_HEADER* _findDosHdrByPatterns(BYTE *search_ptr, const size_t max_search_size);
+	IMAGE_DOS_HEADER* findDosHdrByPatterns(MemPageData &memPage, const size_t start_offset, size_t stop_offset = INVALID_OFFSET);
 
 	HANDLE processHandle;
 	MemPageData &memPage;
