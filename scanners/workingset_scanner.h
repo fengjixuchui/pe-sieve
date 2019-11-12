@@ -7,6 +7,7 @@
 #include <peconv.h>
 #include "module_scan_report.h"
 #include "mempage_data.h"
+#include "scan_report.h"
 
 #include "../utils/util.h"
 
@@ -21,7 +22,7 @@ public:
 		 protection = 0;
 		 has_pe = false; //not a PE file
 		 has_shellcode = true;
-		 is_doppel = false;
+		 mapping_type = 0;
 	}
 
 	const virtual bool toJSON(std::stringstream &outs,size_t level = JSON_LEVEL)
@@ -47,33 +48,48 @@ public:
 			OUT_PADDED(outs, level, "\"is_executable\" : ");
 			outs << std::dec << is_executable;
 		}
-		if (is_doppel) {
-			outs << ",\n";
-			OUT_PADDED(outs, level, "\"is_doppel\" : ");
-			outs << std::dec << is_doppel;
-		}
 		outs << ",\n";
 		OUT_PADDED(outs, level, "\"is_listed_module\" : ");
 		outs << std::dec << is_listed_module;
 		outs << ",\n";
 		OUT_PADDED(outs, level, "\"protection\" : ");
-		outs << std::dec << protection;
+		outs << "\"" << std::hex << protection << "\"";
+		outs << ",\n";
+		OUT_PADDED(outs, level, "\"mapping_type\" : ");
+		outs << "\"" << translate_mapping_type(mapping_type) << "\"";
+		if (mapping_type == MEM_IMAGE || mapping_type == MEM_MAPPED) {
+			outs << ",\n";
+			OUT_PADDED(outs, level, "\"mapped_name\" : ");
+			outs << "\"" << escape_path_separators(mapped_name) << "\"";
+		}
 	}
 
 	bool is_executable;
 	bool is_listed_module;
 	bool has_pe;
 	bool has_shellcode;
-	bool is_doppel;
 	DWORD protection;
+	DWORD mapping_type;
+	std::string mapped_name; //if the region is mapped from a file
+
+protected:
+	static std::string translate_mapping_type(DWORD type)
+	{
+		switch (type) {
+		case MEM_PRIVATE: return "MEM_PRIVATE";
+		case MEM_MAPPED: return "MEM_MAPPED";
+		case MEM_IMAGE: return "MEM_IMAGE";
+		}
+		return "unknown";
+	}
 };
 
 class WorkingSetScanner {
 public:
-	WorkingSetScanner(HANDLE _procHndl, MemPageData &_memPageDatal, bool _detectShellcode, bool _scanData)
+	WorkingSetScanner(HANDLE _procHndl, MemPageData &_memPageDatal, bool _detectShellcode, bool _scanData, ProcessScanReport* _process_report)
 		: processHandle(_procHndl), memPage(_memPageDatal),
 		detectShellcode(_detectShellcode),
-		scanData(_scanData)
+		scanData(_scanData), processReport(_process_report)
 	{
 	}
 
@@ -82,6 +98,8 @@ public:
 	virtual WorkingSetScanReport* scanRemote();
 
 protected:
+	bool scanDisconnectedImg();
+
 	bool isExecutable(MemPageData &memPageData);
 	bool isPotentiallyExecutable(MemPageData &memPageData);
 	bool isCode(MemPageData &memPageData);
@@ -91,4 +109,6 @@ protected:
 	bool detectShellcode; // is shellcode detection enabled
 	HANDLE processHandle;
 	MemPageData &memPage;
+
+	ProcessScanReport* processReport;
 };
