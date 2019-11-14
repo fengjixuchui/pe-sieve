@@ -33,9 +33,9 @@ t_scan_status ProcessScanner::scanForHollows(HANDLE processHandle, ModuleData& m
 #endif
 	HeadersScanner hollows(processHandle, modData, remoteModData);
 	HeadersScanReport *scan_report = hollows.scanRemote();
-	if (scan_report == nullptr) {
+	if (!scan_report) {
 		if (process_report) {
-			process_report->appendReport(new MalformedHeaderReport(processHandle, modData.moduleHandle, modData.original_size, modData.szModName));
+			process_report->appendReport(new UnreachableModuleReport(processHandle, modData.moduleHandle, modData.original_size, modData.szModName));
 		}
 		return SCAN_ERROR;
 	}
@@ -167,7 +167,7 @@ size_t ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws excep
 		memPage.is_listed_module = pReport.hasModule(region_base);
 		memPage.is_dep_enabled = this->isDEP;
 
-		WorkingSetScanner memPageScanner(this->processHandle, memPage, this->args.shellcode, this->args.data, &pReport);
+		WorkingSetScanner memPageScanner(this->processHandle, memPage, this->args, &pReport);
 		WorkingSetScanReport *my_report = memPageScanner.scanRemote();
 
 		counter++;

@@ -37,7 +37,7 @@ bool WorkingSetScanner::isExecutable(MemPageData &memPageData)
 		|| (memPage.protection & PAGE_EXECUTE_WRITECOPY);
 	if (is_any_exec) return true;
 
-	if (this->scanData) {
+	if (this->args.data) {
 		is_any_exec = isPotentiallyExecutable(memPageData);
 	}
 	return is_any_exec;
@@ -66,7 +66,7 @@ WorkingSetScanReport* WorkingSetScanner::scanExecutableArea(MemPageData &memPage
 		//pe artefacts found
 		return my_report;
 	}
-	if (!this->detectShellcode) {
+	if (!this->args.shellcode) {
 		// not a PE file, and we are not interested in shellcode, so just finish it here
 		return nullptr;
 	}
@@ -85,20 +85,51 @@ WorkingSetScanReport* WorkingSetScanner::scanExecutableArea(MemPageData &memPage
 
 bool WorkingSetScanner::scanDisconnectedImg()
 {
-	if (this->processReport->hasModuleContaining(memPage.region_start)) {
-		// already scanned
-		return true;
+	bool show_info = (!args.quiet);
+#ifdef _DEBUG
+	show_info = true;
+#endif
+	const HMODULE module_start = (HMODULE)memPage.alloc_base;
+
+	if (this->processReport->hasModuleContaining((ULONGLONG)module_start)) {
+		if (this->processReport->hasModuleContaining(memPage.region_start)) {
+#ifdef _DEBUG
+			std::cout << "[*] This area was already scanned: " << std::hex << memPage.region_start << std::endl;
+#endif
+			// already scanned
+			return true;
+		}
+		//it may be a shellcode after the loaded PE
+		return false;
 	}
+
 	if (!memPage.loadMappedName()) {
 		//cannot retrieve the mapped name
 		return false;
 	}
-	HMODULE module_start = (HMODULE)memPage.region_start;
+	
+	if (show_info) {
+		std::cout << "[!] Scanning detached: " << std::hex << module_start << " : " << memPage.mapped_name << std::endl;
+	}
 	RemoteModuleData remoteModData(this->processHandle, module_start);
+	if (!remoteModData.isInitialized()) {
+		if (show_info) {
+			std::cout << "[-] Could not read the remote PE at: " << std::hex << module_start << std::endl;
+		}
+		return false;
+	}
+
 	//load module from file:
 	ModuleData modData(processHandle, module_start, memPage.mapped_name);
 	
-	t_scan_status status = ProcessScanner::scanForHollows(processHandle, modData, remoteModData, NULL); //check only, do not add to the report
+	const t_scan_status status = ProcessScanner::scanForHollows(processHandle, modData, remoteModData, processReport);
+#ifdef _DEBUG
+	std::cout << "[*] Scanned for hollows. Status: " << status << std::endl;
+#endif
+	if (status == SCAN_ERROR) {
+		//failed scanning it as a loaded PE module
+		return false;
+	}
 	if (status == SCAN_NOT_SUSPICIOUS) {
 		if (modData.isDotNet()) {
 #ifdef _DEBUG
@@ -109,10 +140,14 @@ bool WorkingSetScanner::scanDisconnectedImg()
 			}
 			return true;
 		}
-		ProcessScanner::scanForHooks(processHandle, modData, remoteModData, processReport);
-		return true;
+		if (!args.no_hooks) {
+			const t_scan_status hooks_stat = ProcessScanner::scanForHooks(processHandle, modData, remoteModData, processReport);
+#ifdef _DEBUG
+			std::cout << "[*] Scanned for hooks. Status: " << hooks_stat << std::endl;
+#endif
+		}
 	}
-	return false;
+	return true;
 }
 
 WorkingSetScanReport* WorkingSetScanner::scanRemote()
@@ -137,18 +172,20 @@ WorkingSetScanReport* WorkingSetScanner::scanRemote()
 
 		const bool is_peb_module = memPage.loadModuleName();
 		const bool is_mapped_name = memPage.loadMappedName();
-
 		if (is_peb_module && is_mapped_name) {
-			//probably legit
+			//probably legit: it was scanned during the modules scan
 			return nullptr;
 		}
 		if (!is_peb_module) {
+#ifdef _DEBUG
+			std::cout << "[!] Detected a disconnected MEM_IMG: " << memPage.region_start << std::endl;
+#endif
 			if (scanDisconnectedImg()) {
-				return nullptr; //scanned as disconnected
+				return nullptr; //scanned as a disconnected PE module
 			}
 			//scanning as disconnected module failed, continue scanning as an implant
 #ifdef _DEBUG
-			std::cout << "[!] " << std::hex << memPage.alloc_base << ": mapped filename: " << memPage.mapped_name << std::endl;
+			std::cout << "Continue to scan the disconnedted MEM_IMG as normal mem page: " << memPage.region_start << std::endl;
 #endif
 		}
 	}
