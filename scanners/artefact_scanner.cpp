@@ -81,6 +81,7 @@ bool is_valid_section(BYTE *loadedData, size_t loadedSize, BYTE *hdr_ptr, DWORD 
 	return true;
 }
 
+
 size_t count_section_hdrs(BYTE *loadedData, size_t loadedSize, IMAGE_SECTION_HEADER *hdr_ptr)
 {
 	if (!loadedData || !hdr_ptr) {
@@ -183,7 +184,10 @@ size_t ArtefactScanner::calcImageSize(MemPageData &memPage, IMAGE_SECTION_HEADER
 		}
 		ULONGLONG region_base = peconv::fetch_alloc_base(this->processHandle, (PBYTE)last_sec_va);
 		if (region_base != main_base) {
+			//it can happen if the PE is in a RAW format instead of Virtual
+#ifdef _DEBUG
 			std::cout << "[!] Mismatch: region_base : " << std::hex << region_base << " while main base: " << main_base << "\n";
+#endif
 			break; // out of scope
 		}
 		max_addr = next_max_addr;
@@ -275,6 +279,83 @@ IMAGE_DOS_HEADER* ArtefactScanner::_findDosHdrByPatterns(BYTE *search_ptr, const
 	return nullptr;
 }
 
+bool ArtefactScanner::_validateSecRegions(MemPageData &memPage, LPVOID sec_hdr, size_t sec_count, ULONGLONG pe_image_base, bool is_virtual)
+{
+	if (!sec_hdr || !sec_count) {
+		return false;
+	}
+	MEMORY_BASIC_INFORMATION module_start_info = { 0 };
+	if (!peconv::fetch_region_info(processHandle, (BYTE*)pe_image_base, module_start_info)) {
+		return false;
+	}
+	IMAGE_SECTION_HEADER* curr_sec = (IMAGE_SECTION_HEADER*)sec_hdr;
+
+	bool fetched_any = false;
+	for (size_t i = 0; i < sec_count; i++, curr_sec++) {
+		if (curr_sec->VirtualAddress == 0) continue;
+
+		ULONG sec_start = is_virtual ? curr_sec->VirtualAddress : curr_sec->PointerToRawData;
+		ULONGLONG last_sec_addr = pe_image_base + sec_start;
+
+		MEMORY_BASIC_INFORMATION page_info = { 0 };
+		if (!peconv::fetch_region_info(processHandle, (BYTE*)last_sec_addr, page_info)) {
+#ifdef _DEBUG
+			std::cout << std::hex << last_sec_addr << " couldn't fetch module info" << std::endl;
+#endif
+			return false;
+		}
+		if (page_info.AllocationBase != module_start_info.AllocationBase) {
+#ifdef _DEBUG
+			std::cout << "[-] SecBase mismatch: ";
+			if (curr_sec->Name) {
+				std::cout << curr_sec->Name;
+			}
+			std::cout << std::hex << i << " section: " << last_sec_addr << " alloc base: " << page_info.AllocationBase << " with module base: " << module_start_info.AllocationBase << std::endl;
+#endif
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ArtefactScanner::_validateSecRegions(MemPageData &memPage, LPVOID sec_hdr, size_t sec_count)
+{
+	if (!memPage.getLoadedData() || !sec_hdr) {
+		return 0;
+	}
+	ULONGLONG pe_image_base = this->calcPeBase(memPage, sec_hdr);
+	bool has_non_zero = false;
+
+	IMAGE_SECTION_HEADER* curr_sec = (IMAGE_SECTION_HEADER*)sec_hdr;
+	for (size_t i = 0; i < sec_count; i++, curr_sec++) {
+		if (curr_sec->VirtualAddress && curr_sec->Misc.VirtualSize) {
+			has_non_zero = true;
+		}
+	}
+	if (!has_non_zero) return false;
+
+	//validate Virtual Sections alignment
+	bool is_ok = _validateSecRegions(memPage, sec_hdr, sec_count, pe_image_base, true);
+	if (!is_ok) {
+		//maybe it is raw?
+		is_ok = _validateSecRegions(memPage, sec_hdr, sec_count, pe_image_base, false);
+#ifdef _DEBUG
+		if (!is_ok) {
+			std::cout << "[-] Raw failed!\n";
+		}
+		else {
+			std::cout << "[+] Raw OK!\n";
+		}
+#endif
+	}
+#ifdef _DEBUG
+	else {
+		std::cout << "[+] Virtual OK!\n";
+	}
+#endif
+	return is_ok;
+}
+
 BYTE* ArtefactScanner::_findSecByPatterns(BYTE *search_ptr, const size_t max_search_size)
 {
 	if (!memPage.load()) {
@@ -341,6 +422,15 @@ IMAGE_SECTION_HEADER* ArtefactScanner::findSecByPatterns(MemPageData &memPage, c
 	}
 	// is it really the first section?
 	IMAGE_SECTION_HEADER *first_sec = get_first_section(memPage.getLoadedData(), memPage.getLoadedSize(), (IMAGE_SECTION_HEADER*) hdr_ptr);
+	if (!first_sec) return nullptr;
+
+	ULONGLONG diff = (ULONGLONG)first_sec - (ULONGLONG)memPage.getLoadedData();
+	size_t count = count_section_hdrs(memPage.getLoadedData(), memPage.getLoadedSize(), first_sec);
+	if (!_validateSecRegions(memPage, first_sec, count)) {
+		std::cout << "[!] section header: " << std::hex << (ULONGLONG)memPage.region_start << " hdr at: " << diff << " : validation failed!\n";
+		return nullptr;
+	}
+	std::cout << "[+] section header: " << std::hex << (ULONGLONG)memPage.region_start << " hdr at: " << diff << " : validation OK!\n";
 	return (IMAGE_SECTION_HEADER*)first_sec;
 }
 
@@ -546,6 +636,7 @@ bool ArtefactScanner::setSecHdr(ArtefactScanner::ArtefactsMapping &aMap, IMAGE_S
 		return false; //misaligned
 	}
 	aMap.sec_hdr = _sec_hdr;
+	aMap.sec_count = count;
 	if (!aMap.pe_image_base) {
 		aMap.pe_image_base = calcPeBase(aMap.memPage, (BYTE*)aMap.sec_hdr);
 	}
@@ -668,10 +759,14 @@ PeArtefacts* ArtefactScanner::findArtefacts(MemPageData &memPage, size_t start_o
 		}
 		if (aMap.sec_hdr) {
 			const size_t sec_offset = calc_offset(memPage, aMap.sec_hdr);
-			if (sec_offset != INVALID_OFFSET && sec_offset > min_offset) min_offset = sec_offset;
+			if (sec_offset != INVALID_OFFSET && sec_offset > min_offset) {
+				const size_t sections_area_size = aMap.sec_count * sizeof(IMAGE_SECTION_HEADER);
+				min_offset = (sec_offset + sections_area_size);
 #ifdef _DEBUG
-			std::cout << "Setting minOffset to SecHdr offset: " << std::hex << min_offset << "\n";
+				std::cout << "Setting minOffset to SecHdr end offset: " << std::hex << min_offset << "\n";
 #endif
+			}
+
 			if (!aMap.dos_hdr) {
 				const size_t start = (sec_offset > PAGE_SIZE) ? (sec_offset - PAGE_SIZE) : 0;
 				//std::cout << "Searching DOS header by patterns " << std::hex << start << "\n";

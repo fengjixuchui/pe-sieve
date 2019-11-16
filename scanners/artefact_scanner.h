@@ -178,6 +178,7 @@ protected:
 			nt_file_hdr = nullptr;
 			sec_hdr = nullptr;
 			isMzPeFound = false;
+			sec_count = 0;
 			is64bit = _is64bit;
 		}
 
@@ -207,6 +208,7 @@ protected:
 			this->dos_hdr = other.dos_hdr;
 			this->nt_file_hdr = other.nt_file_hdr;
 			this->sec_hdr = other.sec_hdr;
+			this->sec_count = other.sec_count;
 			this->isMzPeFound = other.isMzPeFound;
 			this->is64bit = other.is64bit;
 			return *this;
@@ -217,6 +219,7 @@ protected:
 		IMAGE_DOS_HEADER *dos_hdr;
 		IMAGE_FILE_HEADER* nt_file_hdr;
 		IMAGE_SECTION_HEADER* sec_hdr;
+		size_t sec_count;
 		bool isMzPeFound;
 		bool is64bit;
 	};
@@ -245,6 +248,8 @@ protected:
 
 	IMAGE_FILE_HEADER* findNtFileHdr(MemPageData &memPage, const size_t start_offset, size_t stop_offset = INVALID_OFFSET);
 
+	bool _validateSecRegions(MemPageData &memPage,  LPVOID sec_hdr, size_t sec_count, ULONGLONG pe_image_base, bool is_virtual);
+	bool _validateSecRegions(MemPageData &memPage, LPVOID sec_hdr, size_t sec_count);
 	BYTE* _findSecByPatterns(BYTE *search_ptr, const size_t max_search_size);
 	IMAGE_SECTION_HEADER* findSecByPatterns(MemPageData &memPageData, const size_t max_search_size, const size_t search_offset);
 
