@@ -103,7 +103,7 @@ void ImpReconstructor::printFoundIATs(std::string reportPath)
 	}
 
 	std::map<DWORD, IATBlock*>::iterator itr;
-	for (itr = foundIATs.begin(); itr != foundIATs.end(); itr++) {
+	for (itr = foundIATs.begin(); itr != foundIATs.end(); ++itr) {
 		report << itr->second->toString();
 	}
 	report.close();
@@ -216,7 +216,7 @@ bool ImpReconstructor::findImportTable(IN const peconv::ExportsMapper* exportsMa
 	const size_t start_offset = peconv::get_hdrs_size(vBuf);
 	
 	std::map<DWORD, IATBlock*>::iterator itr;
-	for (itr = foundIATs.begin(); itr != foundIATs.end(); itr++) {
+	for (itr = foundIATs.begin(); itr != foundIATs.end(); ++itr) {
 		IATBlock *currIAT = itr->second;
 
 		const DWORD iat_offset = currIAT->iatOffset;
@@ -266,7 +266,7 @@ bool ImpReconstructor::findIATsCoverage(IN const peconv::ExportsMapper* exportsM
 {
 	size_t covered = 0;
 	std::map<DWORD, IATBlock*>::iterator itr;
-	for (itr = foundIATs.begin(); itr != foundIATs.end(); itr++) {
+	for (itr = foundIATs.begin(); itr != foundIATs.end(); ++itr) {
 		IATBlock* iat = itr->second;
 		if (iat->makeCoverage(exportsMap)) {
 			covered++;
@@ -286,7 +286,7 @@ ImportTableBuffer* ImpReconstructor::constructImportTable()
 
 	size_t ready_blocks = 0;
 	std::map<DWORD, IATBlock*>::iterator itr;
-	for (itr = foundIATs.begin(); itr != foundIATs.end(); itr++) {
+	for (itr = foundIATs.begin(); itr != foundIATs.end(); ++itr) {
 		IATBlock* iat = itr->second;
 		if (iat->isValid()) {
 			ready_blocks += iat->thunkSeries.size();
@@ -302,13 +302,13 @@ ImportTableBuffer* ImpReconstructor::constructImportTable()
 	size_t orig_thunk_rva = names_start_rva;
 	size_t names_space = 0;
 	size_t i = 0;
-	for (itr = foundIATs.begin(); itr != foundIATs.end(); itr++) {
+	for (itr = foundIATs.begin(); itr != foundIATs.end(); ++itr) {
 		IATBlock* iat = itr->second;
 		if (!iat->isValid()) {
 			continue;
 		}
 		IATThunksSeriesSet::iterator sItr;
-		for (sItr = iat->thunkSeries.begin(); sItr != iat->thunkSeries.end(); sItr++, i++) {
+		for (sItr = iat->thunkSeries.begin(); sItr != iat->thunkSeries.end(); ++sItr, ++i) {
 			IATThunksSeries *series = *sItr;
 			importTableBuffer->descriptors[i].FirstThunk = series->startOffset;
 			importTableBuffer->descriptors[i].OriginalFirstThunk = orig_thunk_rva;
@@ -323,13 +323,13 @@ ImportTableBuffer* ImpReconstructor::constructImportTable()
 	const DWORD dlls_rva = names_start_rva + names_space;
 	size_t dlls_area_size = 0;
 	i = 0;
-	for (itr = foundIATs.begin(); itr != foundIATs.end(); itr++) {
+	for (itr = foundIATs.begin(); itr != foundIATs.end(); ++itr) {
 		IATBlock* iat = itr->second;
 		if (!iat->isValid()) {
 			continue;
 		}
 		IATThunksSeriesSet::iterator sItr;
-		for (sItr = iat->thunkSeries.begin(); sItr != iat->thunkSeries.end(); sItr++, i++) {
+		for (sItr = iat->thunkSeries.begin(); sItr != iat->thunkSeries.end(); ++sItr++, ++i) {
 			IATThunksSeries *series = *sItr;
 			DWORD name_rva = importTableBuffer->descriptors[i].OriginalFirstThunk;
 			const size_t names_space_size = series->sizeOfNamesSpace(this->is64bit);
@@ -345,14 +345,14 @@ ImportTableBuffer* ImpReconstructor::constructImportTable()
 	importTableBuffer->allocDllsSpace(dlls_rva, dlls_area_size);
 	DWORD dll_name_rva = dlls_rva;
 	i = 0;
-	for (itr = foundIATs.begin(); itr != foundIATs.end(); itr++) {
+	for (itr = foundIATs.begin(); itr != foundIATs.end(); ++itr) {
 		IATBlock* iat = itr->second;
 		if (!iat->isValid()) {
 			continue;
 		}
 		size_t max_dll_name = iat->maxDllLen();
 		IATThunksSeriesSet::iterator sItr;
-		for (sItr = iat->thunkSeries.begin(); sItr != iat->thunkSeries.end(); sItr++, i++) {
+		for (sItr = iat->thunkSeries.begin(); sItr != iat->thunkSeries.end(); ++sItr, ++i) {
 			IATThunksSeries *series = *sItr;
 			importTableBuffer->descriptors[i].Name = dll_name_rva;
 			BYTE *buf = importTableBuffer->getDllSpaceAt(dll_name_rva, max_dll_name);

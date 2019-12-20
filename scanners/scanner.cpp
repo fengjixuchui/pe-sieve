@@ -119,7 +119,7 @@ ProcessScanReport* ProcessScanner::scanRemote()
 	bool workingsetScanned = true;
 	try {
 		//dont't scan your own working set
-		if (GetProcessId(this->processHandle) != GetCurrentProcessId()) {
+		if (peconv::get_process_id(this->processHandle) != GetCurrentProcessId()) {
 			scanWorkingSet(*pReport);
 		}
 	} catch (std::exception &e) {
@@ -159,7 +159,7 @@ size_t ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws excep
 	size_t counter = 0;
 	//now scan all the nodes:
 	std::set<ULONGLONG>::iterator set_itr;
-	for (set_itr = region_bases.begin(); set_itr != region_bases.end(); set_itr++) {
+	for (set_itr = region_bases.begin(); set_itr != region_bases.end(); ++set_itr) {
 		ULONGLONG region_base = *set_itr;
 
 		MemPageData memPage(this->processHandle, region_base);
