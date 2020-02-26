@@ -5,6 +5,7 @@
 #include <map>
 
 #include <peconv.h>
+#include "..\utils\util.h"
 
 class ModuleData {
 

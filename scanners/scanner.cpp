@@ -222,6 +222,12 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 		//load module from file:
 		ModuleData modData(processHandle, hMods[counter]);
 
+		// Don't scan modules that are in the ignore list
+		std::string plainName = peconv::get_file_name(modData.szModName);
+		if (is_in_list(plainName.c_str(), args.modules_ignored)) {
+			continue;
+		}
+
 		ModuleScanReport *mappingScanReport = this->scanForMappingMismatch(modData, pReport);
 
 		if (!modData.loadOriginal()) {

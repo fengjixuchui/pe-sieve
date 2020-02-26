@@ -22,6 +22,7 @@
 #define PARAM_SHELLCODE "shellc"
 #define PARAM_DATA "data"
 #define PARAM_MODULES_FILTER "mfilter"
+#define PARAM_MODULES_IGNORE "mignore"
 //dump options:
 #define PARAM_IMP_REC "imp"
 #define PARAM_DUMP_MODE "dmode"
@@ -36,6 +37,8 @@
 #define PARAM_HELP2  "?"
 #define PARAM_VERSION "version"
 #define PARAM_VERSION2 "ver"
+
+#define PARAM_LIST_SEPARATOR ';'
 
 using namespace pesieve;
 
@@ -54,7 +57,6 @@ void print_param_in_color(int color, const std::string &text)
 	print_in_color(color, PARAM_SWITCH1 + text);
 }
 
-
 void print_help()
 {
 	const int hdr_color = HEADER_COLOR;
@@ -70,7 +72,7 @@ void print_help()
 	print_param_in_color(param_color, PARAM_SHELLCODE);
 	std::cout << "\t: Detect shellcode implants. (By default it detects PE only).\n";
 	print_param_in_color(param_color, PARAM_DATA);
-	std::cout << "\t: If DEP is disabled scan also non-executable memory\n\t(which potentially can be executed).\n";
+	std::cout << "\t: If DEP is disabled scan also non-executable memory\n\t  (which potentially can be executed).\n";
 #ifdef _WIN64
 	print_param_in_color(param_color, PARAM_MODULES_FILTER);
 	std::cout << " <*mfilter_id>\n\t: Filter the scanned modules.\n";
@@ -79,6 +81,9 @@ void print_help()
 		std::cout << "\t" << i << " - " << translate_modules_filter(i) << "\n";
 	}
 #endif
+	print_param_in_color(param_color, PARAM_MODULES_IGNORE);
+	std::cout << " <module_name>\n\t: Do not scan module/s with given name/s (separated by '"<< PARAM_LIST_SEPARATOR << "').\n"
+		"\t  Example: kernel32.dll" << PARAM_LIST_SEPARATOR << "user32.dll\n";
 
 	print_in_color(separator_color, "\n---dump options---\n");
 	print_param_in_color(param_color, PARAM_IMP_REC);
@@ -114,7 +119,7 @@ void print_help()
 
 	print_param_in_color(param_color, PARAM_MINIDUMP);
 	std::cout << ": Create a minidump of the full suspicious process.\n";
-	
+
 	print_param_in_color(param_color, PARAM_DIR);
 	std::cout << " <output_dir>\n\t: Set a root directory for the output (default: current directory).\n";
 	print_in_color(hdr_color, "\nInfo: \n");
@@ -237,12 +242,16 @@ int main(int argc, char *argv[])
 		else if (!strcmp(param, PARAM_OUT_FILTER) && (i + 1) < argc) {
 			args.out_filter = static_cast<t_output_filter>(atoi(argv[i + 1]));
 			i++;
-		} 
+		}
 		else if (!strcmp(param, PARAM_MODULES_FILTER) && (i + 1) < argc) {
 			args.modules_filter = atoi(argv[i + 1]);
 			if (args.modules_filter > LIST_MODULES_ALL) {
 				args.modules_filter = LIST_MODULES_ALL;
 			}
+			i++;
+		}
+		else if (!strcmp(param, PARAM_MODULES_IGNORE) && (i + 1) < argc) {
+			delim_list_to_multi_sz(argv[i + 1], ';', args.modules_ignored, _countof(args.modules_ignored));
 			i++;
 		}
 		else if (!strcmp(param, PARAM_PID) && (i + 1) < argc) {
