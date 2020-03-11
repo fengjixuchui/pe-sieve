@@ -8,8 +8,6 @@
 
 #include "utils/process_privilege.h"
 
-#include "utils/util.h"
-
 #include "pe_sieve.h"
 #include "params_info/pe_sieve_params_info.h"
 
@@ -37,8 +35,6 @@
 #define PARAM_HELP2  "?"
 #define PARAM_VERSION "version"
 #define PARAM_VERSION2 "ver"
-
-#define PARAM_LIST_SEPARATOR ';'
 
 using namespace pesieve;
 
@@ -153,13 +149,13 @@ ________________________________________________________________________\n";
 	print_help();
 }
 
-void print_report(const ProcessScanReport& report, const t_params args)
+void print_scan_report(const ProcessScanReport& report, const t_params args)
 {
 	std::string report_str;
 	if (args.json_output) {
-		report_str = report_to_json(report, REPORT_SUSPICIOUS_AND_ERRORS);
+		report_str = scan_report_to_json(report, ProcessScanReport::REPORT_SUSPICIOUS_AND_ERRORS);
 	} else {
-		report_str = report_to_string(report);
+		report_str = scan_report_to_string(report);
 	}
 	//summary:
 	const t_report summary = report.generateSummary();
@@ -199,6 +195,16 @@ bool is_param(const char *str)
 		return true;
 	}
 	return false;
+}
+
+size_t copyToCStr(char *buf, size_t buf_max, const std::string &value)
+{
+	size_t len = value.length() + 1;
+	if (len > buf_max) len = buf_max;
+
+	memcpy(buf, value.c_str(), buf_max);
+	buf[len] = '\0';
+	return len;
 }
 
 int main(int argc, char *argv[])
@@ -251,7 +257,7 @@ int main(int argc, char *argv[])
 			i++;
 		}
 		else if (!strcmp(param, PARAM_MODULES_IGNORE) && (i + 1) < argc) {
-			delim_list_to_multi_sz(argv[i + 1], ';', args.modules_ignored, _countof(args.modules_ignored));
+			copyToCStr(args.modules_ignored, MAX_MODULE_BUF_LEN, argv[i + 1]);
 			i++;
 		}
 		else if (!strcmp(param, PARAM_PID) && (i + 1) < argc) {
@@ -311,9 +317,9 @@ int main(int argc, char *argv[])
 		std::cout << "Output filter: " << translate_out_filter(args.out_filter) << std::endl;
 		std::cout << "Dump mode: " << translate_dump_mode(args.dump_mode) << std::endl;
 	}
-	ProcessScanReport* report = scan_process(args);
+	pesieve::ReportEx* report = pesieve::scan_and_dump(args);
 	if (report != nullptr) {
-		print_report(*report, args);
+		print_scan_report(*report->scan_report, args);
 		delete report;
 		report = nullptr;
 	}

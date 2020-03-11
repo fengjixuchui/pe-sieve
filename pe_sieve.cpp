@@ -7,10 +7,11 @@
 #include <Windows.h>
 #include "scanners/scanner.h"
 
-#include "utils/util.h"
+#include "utils/format_util.h"
 #include "utils/process_util.h"
 #include "utils/process_privilege.h"
 #include "utils/process_minidump.h"
+#include "utils/path_converter.h"
 #include "postprocessors/results_dumper.h"
 
 using namespace pesieve;
@@ -48,7 +49,7 @@ HANDLE open_process(DWORD processID, bool quiet)
 	}
 	DWORD last_err = GetLastError();
 	if (last_err == ERROR_ACCESS_DENIED) {
-		if (set_debug_privilege(processID)) {
+		if (set_debug_privilege()) {
 			//try again to open
 			hProcess = OpenProcess(
 				PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
@@ -81,7 +82,7 @@ HANDLE open_process(DWORD processID, bool quiet)
 	return hProcess;
 }
 
-bool is_scaner_compatibile(HANDLE hProcess, bool quiet)
+bool is_scaner_compatibile(IN HANDLE hProcess, bool quiet)
 {
 	BOOL isCurrWow64 = FALSE;
 	is_process_wow64(GetCurrentProcess(), &isCurrWow64);
@@ -96,15 +97,17 @@ bool is_scaner_compatibile(HANDLE hProcess, bool quiet)
 	return true;
 }
 
-size_t dump_output(ProcessScanReport *process_report, HANDLE hProcess, const pesieve::t_params args)
+ProcessDumpReport* pesieve::dump_output(IN ProcessScanReport &process_report, IN const pesieve::t_params args, IN HANDLE hProcess)
 {
-	if (!process_report || !hProcess) return 0;
+	if (!hProcess) return nullptr;
 	if (args.out_filter == OUT_NO_DIR) {
-		return 0;
+		return nullptr;
 	}
-	ResultsDumper dumper(args.output_dir, args.quiet);
 
-	if (dumper.dumpJsonReport(*process_report, REPORT_SUSPICIOUS_AND_ERRORS) && !args.quiet) {
+	ProcessDumpReport* dumpReport = nullptr;
+	ResultsDumper dumper(expand_path(args.output_dir), args.quiet);
+
+	if (dumper.dumpJsonReport(process_report, ProcessScanReport::REPORT_SUSPICIOUS_AND_ERRORS) && !args.quiet) {
 		std::cout << "[+] Report dumped to: " << dumper.getOutputDir() << std::endl;
 	}
 	size_t dumped_modules = 0;
@@ -113,21 +116,30 @@ size_t dump_output(ProcessScanReport *process_report, HANDLE hProcess, const pes
 		if (args.dump_mode < peconv::PE_DUMP_MODES_COUNT) {
 			dump_mode = pesieve::t_dump_mode(args.dump_mode);
 		}
-		dumped_modules = dumper.dumpDetectedModules(hProcess, *process_report, dump_mode, args.imprec_mode);
-		if (dumped_modules && !args.quiet) {
+		dumpReport = dumper.dumpDetectedModules(hProcess, process_report, dump_mode, args.imprec_mode);
+		if (dumpReport && dumpReport->countDumped()) {
+			dumped_modules = dumpReport->countDumped();
+		}
+		if (!args.quiet && dumped_modules) {
 			std::cout << "[+] Dumped modified to: " << dumper.getOutputDir() << std::endl;
 		}
 	}
 	if (args.minidump) {
-		pesieve::t_report report = process_report->generateSummary();
+		pesieve::t_report report = process_report.generateSummary();
 		if (report.suspicious > 0) {
-			std::cout << "[*] Creating minidump..." << std::endl;
-			std::string original_path = process_report->mainImagePath;
+			if (!args.quiet) {
+				std::cout << "[*] Creating minidump..." << std::endl;
+			}
+			std::string original_path = process_report.mainImagePath;
 			std::string file_name = peconv::get_file_name(original_path);
 			std::string dump_file = dumper.makeOutPath(file_name + ".dmp");
-			if (make_minidump(process_report->getPid(), dump_file)) {
+			if (make_minidump(process_report.getPid(), dump_file)) {
+				if (!dumpReport) {
+					dumpReport = new ProcessDumpReport(process_report.getPid());
+				}
+				dumpReport->minidumpPath = dump_file;
 				if(!args.quiet) {
-					std::cout << "[+] Minidump saved to: " << dump_file << std::endl;
+					std::cout << "[+] Minidump saved to: " << dumpReport->minidumpPath << std::endl;
 				}
 			}
 			else if(!args.quiet){
@@ -135,15 +147,53 @@ size_t dump_output(ProcessScanReport *process_report, HANDLE hProcess, const pes
 			}
 		}
 	}
-	return dumped_modules;
+	if (dumpReport) {
+		dumpReport->outputDir = dumper.getOutputDir();
+		if (dumper.dumpJsonReport(*dumpReport) && !args.quiet) {
+			std::cout << "[+] Report dumped to: " << dumper.getOutputDir() << std::endl;
+		}
+	}
+	return dumpReport;
 }
 
-ProcessScanReport* scan_process(const t_params args)
+pesieve::ReportEx* pesieve::scan_and_dump(IN const pesieve::t_params args)
 {
+	ReportEx *report = new ReportEx();
 	HANDLE hProcess = nullptr;
-	ProcessScanReport *process_report = nullptr;
+
 	try {
 		hProcess = open_process(args.pid, args.quiet);
+		if (!is_scaner_compatibile(hProcess, args.quiet)) {
+			SetLastError(ERROR_INVALID_PARAMETER);
+			throw std::runtime_error("Scanner mismatch. Try to use the 64bit version of the scanner.");
+		}
+		ProcessScanner scanner(hProcess, args);
+		report->scan_report = scanner.scanRemote();
+
+	}
+	catch (std::exception &e) {
+		if (!args.quiet) {
+			std::cerr << "[ERROR] " << e.what() << std::endl;
+		}
+		return nullptr;
+
+	}
+	if (report->scan_report) {
+		report->dump_report = dump_output(*report->scan_report, args, hProcess);
+	}
+	CloseHandle(hProcess);
+	return report;
+}
+
+ProcessScanReport* pesieve::scan_process(IN const t_params args, IN OPTIONAL HANDLE hProcess)
+{
+	bool autoopened = false;
+	ProcessScanReport *process_report = nullptr;
+	try {
+		if (!hProcess) {
+			hProcess = open_process(args.pid, args.quiet);
+			autoopened = true;
+		}
 		if (!is_scaner_compatibile(hProcess, args.quiet)) {
 			SetLastError(ERROR_INVALID_PARAMETER);
 			throw std::runtime_error("Scanner mismatch. Try to use the 64bit version of the scanner.");
@@ -158,12 +208,13 @@ ProcessScanReport* scan_process(const t_params args)
 		return nullptr;
 		
 	}
-	dump_output(process_report, hProcess, args);
-	CloseHandle(hProcess);
+	if (autoopened) {
+		CloseHandle(hProcess);
+	}
 	return process_report;
 }
 
-std::string info()
+std::string pesieve::info()
 {
 	std::stringstream stream;
 	stream << "Version:  " << PESIEVE_VERSION;

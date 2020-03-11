@@ -12,6 +12,7 @@
 #include "module_scan_report.h"
 #include "scanned_modules.h"
 
+
 class ProcessScanReport
 {
 public:
@@ -23,7 +24,15 @@ public:
 		REPORT_UNREACHABLE_SCAN,
 		REPORT_SKIPPED_SCAN,
 		REPORT_TYPES_COUNT
-	} report_type_t;
+	} t_report_type;
+
+	typedef enum {
+		REPORT_ERRORS = 1,
+		REPORT_NOT_SUSPICIOUS = 2,
+		REPORT_SUSPICIOUS = 4,
+		REPORT_SUSPICIOUS_AND_ERRORS = REPORT_ERRORS | REPORT_SUSPICIOUS,
+		REPORT_ALL = REPORT_ERRORS | REPORT_NOT_SUSPICIOUS | REPORT_SUSPICIOUS
+	} t_report_filter;
 
 	ProcessScanReport(DWORD _pid)
 		: pid(_pid), exportsMap(nullptr), errorsCount(0), modulesInfo(pid)
@@ -64,6 +73,8 @@ public:
 		return true;
 	}
 
+	const virtual bool toJSON(std::stringstream &stream, size_t level, const t_report_filter &filter) const;
+
 	pesieve::t_report generateSummary() const;
 	DWORD getPid() { return pid; }
 
@@ -72,6 +83,8 @@ public:
 	peconv::ExportsMapper *exportsMap;
 
 protected:
+	std::string list_modules(size_t level, const ProcessScanReport::t_report_filter &filter) const;
+
 	void deleteModuleReports()
 	{
 		std::vector<ModuleScanReport*>::iterator itr = module_reports.begin();
@@ -83,7 +96,7 @@ protected:
 	}
 
 	void appendToType(ModuleScanReport *report);
-	size_t countSuspiciousPerType(report_type_t type) const;
+	size_t countSuspiciousPerType(t_report_type type) const;
 	size_t countHdrsReplaced() const;
 
 	bool appendToModulesList(ModuleScanReport *report);

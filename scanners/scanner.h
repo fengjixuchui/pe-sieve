@@ -5,7 +5,6 @@
 
 #include <peconv.h>
 #include "scan_report.h"
-
 #include "module_data.h"
 
 class ProcessScanner {
@@ -14,6 +13,8 @@ public:
 		: args(_args), isDEP(false)
 	{
 		this->processHandle = procHndl;
+		ZeroMemory(ignoredModules, _countof(ignoredModules));
+		delim_list_to_multi_sz(args.modules_ignored, PARAM_LIST_SEPARATOR, ignoredModules, _countof(ignoredModules));
 	}
 
 	~ProcessScanner()
@@ -37,5 +38,7 @@ protected:
 	bool isDEP;
 	size_t hModsMax;
 	pesieve::t_params args;
+
+	char ignoredModules[MAX_MODULE_BUF_LEN];
 };
 

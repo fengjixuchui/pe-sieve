@@ -60,6 +60,7 @@ set (imprec_hdrs
 set (postprocessors_hdrs
 	postprocessors/report_formatter.h
 	postprocessors/results_dumper.h
+	postprocessors/dump_report.h
 	postprocessors/pe_buffer.h
 	postprocessors/pe_reconstructor.h
 )
@@ -74,15 +75,17 @@ set (imprec_srcs
 set (postprocessors_srcs
 	postprocessors/report_formatter.cpp
 	postprocessors/results_dumper.cpp
+	postprocessors/dump_report.cpp
 	postprocessors/pe_buffer.cpp
 	postprocessors/pe_reconstructor.cpp
 )
 
 set (utils_srcs
+	utils/format_util.cpp
 	utils/process_util.cpp
 	utils/process_privilege.cpp
 	utils/process_minidump.cpp
-	utils/util.cpp
+	utils/path_util.cpp
 	utils/path_converter.cpp
 	utils/workingset_enum.cpp
 	utils/modules_enum.cpp
@@ -90,7 +93,8 @@ set (utils_srcs
 )
 
 set (utils_hdrs
-	utils/util.h
+	utils/format_util.h
+	utils/path_util.h
 	utils/path_converter.h
 	utils/process_util.h
 	utils/process_privilege.h

@@ -7,7 +7,9 @@
 [![Github All Releases](https://img.shields.io/github/downloads/hasherezade/pe-sieve/total.svg)](http://www.somsubhra.com/github-release-stats/?username=hasherezade&repository=pe-sieve) 
 [![Twitter URL](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?original_referer=https://github.com/hasherezade/pe-sieve&text=%23PEsieve%3A+an+open-source+process+scanner%2C+detecting+and+dumping+malicious+implants:%20https://github.com/hasherezade/pe-sieve)
 
-[FAQ - Frequently Asked Questions](https://github.com/hasherezade/pe-sieve/wiki/1.-FAQ)
+❓ [FAQ - Frequently Asked Questions](https://github.com/hasherezade/pe-sieve/wiki/1.-FAQ)
+
+📖 [Read Wiki](https://github.com/hasherezade/pe-sieve/wiki)
 
 <b>PE-sieve</b> is a tool that helps to detect malware running on the system, as well as to collect the potentially malicious material for further analysis. Recognizes and dumps variety of implants within the scanned process: replaced/injected PEs, shellcodes, hooks, and other in-memory patches.<br/>
 Detects inline hooks, Process Hollowing, Process Doppelgänging, Reflective DLL Injection, etc.
@@ -27,15 +29,10 @@ Use recursive clone to get the repo together with the submodule:
 git clone --recursive https://github.com/hasherezade/pe-sieve.git
 </pre>
 
-Latest builds*:
+Builds:
 -
-*those builds are available for testing and they may be ahead of the official [release](https://github.com/hasherezade/pe-sieve/releases):
-+ [32-bit](https://goo.gl/PnM3U2)
-+ [64-bit](https://goo.gl/scP1Hi)
+Download the latest [release](https://github.com/hasherezade/pe-sieve/releases), or [read more](https://github.com/hasherezade/pe-sieve/wiki/1.-FAQ#how-to-get-it).
 
-Read more:
--
-📖 Wiki: https://github.com/hasherezade/pe-sieve/wiki
 <hr/>
 
 logo by [Baran Pirinçal](https://github.com/baranpirincal)
