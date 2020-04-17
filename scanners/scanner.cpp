@@ -12,6 +12,7 @@
 
 #include "headers_scanner.h"
 #include "code_scanner.h"
+#include "iat_scanner.h"
 #include "workingset_scanner.h"
 #include "mapping_scanner.h"
 #include "hook_targets_resolver.h"
@@ -64,6 +65,29 @@ t_scan_status ProcessScanner::scanForHollows(HANDLE processHandle, ModuleData& m
 	return is_suspicious;
 }
 
+t_scan_status ProcessScanner::scanForIATHooks(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report, bool filter)
+{
+	const peconv::ExportsMapper *expMap = process_report->exportsMap;
+	if (!expMap) {
+		return SCAN_ERROR;
+	}
+
+	IATScanner scanner(processHandle, modData, remoteModData, *expMap, process_report->modulesInfo, filter);
+
+	IATScanReport *scan_report = scanner.scanRemote();
+	if (!scan_report) {
+		return SCAN_ERROR;
+	}
+	t_scan_status scan_res = ModuleScanReport::get_scan_status(scan_report);
+	if (process_report) {
+		process_report->appendReport(scan_report);
+	}
+	else {
+		delete scan_report; scan_report = nullptr;
+	}
+	return scan_res;
+}
+
 t_scan_status ProcessScanner::scanForHooks(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report)
 {
 	CodeScanner hooks(processHandle, modData, remoteModData);
@@ -109,6 +133,13 @@ ProcessScanReport* ProcessScanner::scanRemote()
 		if (scanned == 0) {
 			modulesScanned = false;
 			errorsStr << "No modules found!";
+		}
+		if (args.iat) {
+			scanned = scanModulesIATs(*pReport);
+			if (scanned == 0) {
+				modulesScanned = false;
+				errorsStr << "No modules found!";
+			}
 		}
 	} catch (std::exception &e) {
 		modulesScanned = false;
@@ -211,7 +242,7 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 	if (modules_count == 0) {
 		return 0;
 	}
-	if (args.imprec_mode != PE_IMPREC_NONE) {
+	if (args.imprec_mode != PE_IMPREC_NONE || args.iat != pesieve::PE_IATS_NONE) {
 		pReport.exportsMap = new peconv::ExportsMapper();
 	}
 
@@ -225,6 +256,10 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 		// Don't scan modules that are in the ignore list
 		std::string plainName = peconv::get_file_name(modData.szModName);
 		if (is_in_list(plainName.c_str(), this->ignoredModules)) {
+			// ...but add such modules to the exports lookup:
+			if (pReport.exportsMap && modData.loadOriginal()) {
+				pReport.exportsMap->add_to_lookup(modData.szModName, (HMODULE)modData.original_module, (ULONGLONG)modData.moduleHandle);
+			}
 			continue;
 		}
 
@@ -270,6 +305,47 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 		// if hooks not disabled and process is not hollowed, check for hooks:
 		if (!args.no_hooks && (is_hollowed == SCAN_NOT_SUSPICIOUS)) {
 			scanForHooks(processHandle, modData, remoteModData, &pReport);
+		}
+	}
+	return counter;
+}
+
+size_t ProcessScanner::scanModulesIATs(ProcessScanReport &pReport) //throws exceptions
+{
+	if (!pReport.exportsMap) {
+		return 0; // this feature cannot work without Exports Map
+	}
+	HMODULE hMods[1024];
+	const size_t modules_count = enum_modules(this->processHandle, hMods, sizeof(hMods), args.modules_filter);
+	if (modules_count == 0) {
+		return 0;
+	}
+
+	size_t counter = 0;
+	for (counter = 0; counter < modules_count; counter++) {
+		if (processHandle == nullptr) break;
+
+		//load module from file:
+		ModuleData modData(processHandle, hMods[counter]);
+
+		// Don't scan modules that are in the ignore list
+		std::string plainName = peconv::get_file_name(modData.szModName);
+		if (is_in_list(plainName.c_str(), this->ignoredModules)) {
+			continue;
+		}
+
+		//load data about the remote module
+		RemoteModuleData remoteModData(processHandle, hMods[counter], true);
+		if (remoteModData.isInitialized() == false) {
+			//make a report that initializing remote module was not possible
+			pReport.appendReport(new MalformedHeaderReport(processHandle, hMods[counter], 0, modData.szModName));
+			continue;
+		}
+
+		bool filterSysHooks = (this->args.iat == pesieve::PE_IATS_FILTERED) ? true : false;
+		t_scan_status is_iat_patched = scanForIATHooks(processHandle, modData, remoteModData, &pReport, filterSysHooks);
+		if (is_iat_patched == SCAN_ERROR) {
+			continue;
 		}
 	}
 	return counter;

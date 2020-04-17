@@ -9,6 +9,7 @@
 #include "../utils/workingset_enum.h"
 #include "pe_reconstructor.h"
 #include "imp_rec/imp_reconstructor.h"
+#include "../scanners/iat_scanner.h"
 
 #define DIR_SEPARATOR "\\"
 
@@ -103,69 +104,6 @@ std::string get_module_file_name(HANDLE processHandle, const ModuleScanReport& m
 	return modulePath;
 }
 //---
-
-bool saveNotRecovered(IN std::string fileName,
-	IN HANDLE hProcess,
-	IN const std::map<ULONGLONG, peconv::ExportedFunc> storedFunc,
-	IN peconv::ImpsNotCovered notCovered,
-	IN const ProcessModules &modulesInfo,
-	IN const peconv::ExportsMapper *exportsMap)
-{
-	const char delim = ';';
-
-	if (notCovered.addresses.size() == 0) {
-		return false;
-	}
-	std::ofstream report;
-	report.open(fileName);
-	if (report.is_open() == false) {
-		return false;
-	}
-
-	std::set<ULONGLONG>::iterator itr;
-	for (itr = notCovered.addresses.begin(); itr != notCovered.addresses.end(); itr++)
-	{
-		const ULONGLONG addr = *itr;
-		report << std::hex << addr;
-		std::map<ULONGLONG, peconv::ExportedFunc>::const_iterator found = storedFunc.find(addr);
-		if (found != storedFunc.end()) {
-			const peconv::ExportedFunc &func = found->second;
-			report << delim << func.toString() << "->";
-		}
-		else {
-			report << delim << "(unknown)" << "->";
-		}
-
-		if (exportsMap) {
-			LoadedModule *modExp = modulesInfo.getModuleContaining(addr);
-			ULONGLONG module_start = (modExp) ? modExp->start : peconv::fetch_alloc_base(hProcess, (BYTE*)addr);
-
-			const peconv::ExportedFunc* func = exportsMap->find_export_by_va(addr);
-			if (!func) {
-				char moduleName[MAX_PATH] = { 0 };
-				if (GetModuleBaseNameA(hProcess, (HMODULE)module_start, moduleName, sizeof(moduleName))) {
-					report << peconv::get_dll_shortname(moduleName)<< ".(unknown_func)";
-				}
-				else {
-					report << "(unknown)";
-				}
-			}
-			else {
-				report << func->toString();
-			}
-
-			size_t offset = addr - module_start;
-			report << delim << std::hex << module_start << "+" << offset;
-
-			if (modExp) {
-				report << delim << modExp->isSuspicious();
-			}
-		}
-		report << std::endl;
-	}
-	report.close();
-	return true;
-}
 
 bool ResultsDumper::dumpJsonReport(ProcessScanReport &process_report, ProcessScanReport::t_report_filter filter)
 {
@@ -318,20 +256,24 @@ bool ResultsDumper::dumpModule(IN HANDLE processHandle,
 	modDumpReport->dumpFileName = makeModuleDumpPath(module_buf.getModuleBase(), module_name, payload_ext);
 	modDumpReport->is_corrupt_pe = is_corrupt_pe;
 	modDumpReport->is_shellcode = !module_buf.isValidPe();
-
-	std::map<ULONGLONG, peconv::ExportedFunc> stored_func;
-	module_buf.listAllImports(stored_func);
-
+	
 	peconv::ImpsNotCovered notCovered;
 
 	if (module_buf.isFilled()) {
+
 		// Try to fix imports:
 		ImpReconstructor impRec(module_buf);
 		ImpReconstructor::t_imprec_res imprec_res = impRec.rebuildImportTable(exportsMap, imprec_mode);
-
 		modDumpReport->impRecMode = get_imprec_res_name(imprec_res);
+
 		module_buf.setRelocBase(mod->getRelocBase());
-		modDumpReport->isDumped = module_buf.dumpPeToFile(modDumpReport->dumpFileName, curr_dump_mode, exportsMap, &notCovered);
+		if (imprec_mode == pesieve::PE_IMPREC_NONE) {
+			modDumpReport->isDumped = module_buf.dumpPeToFile(modDumpReport->dumpFileName, curr_dump_mode);
+		}
+		else {
+			modDumpReport->isDumped = module_buf.dumpPeToFile(modDumpReport->dumpFileName, curr_dump_mode, exportsMap, &notCovered);
+		}
+		
 
 		if (!modDumpReport->isDumped) {
 			modDumpReport->isDumped = module_buf.dumpToFile(modDumpReport->dumpFileName);
@@ -346,7 +288,7 @@ bool ResultsDumper::dumpModule(IN HANDLE processHandle,
 			}
 		}
 		std::string imports_not_rec_file = modDumpReport->dumpFileName + ".not_fixed_imports.txt";
-		if (saveNotRecovered(imports_not_rec_file, processHandle, stored_func, notCovered, modulesInfo, exportsMap)) {
+		if (IATScanReport::saveNotRecovered(imports_not_rec_file, processHandle, nullptr, notCovered, modulesInfo, exportsMap)) {
 			modDumpReport->notRecoveredFileName = imports_not_rec_file;
 		}
 	}
@@ -366,6 +308,15 @@ bool ResultsDumper::dumpModule(IN HANDLE processHandle,
 		modDumpReport->isDumped = module_buf.dumpToFile(modDumpReport->dumpFileName);
 		curr_dump_mode = peconv::PE_DUMP_VIRTUAL;
 		modDumpReport->mode_info = get_dump_mode_name(curr_dump_mode);
+	}
+
+	IATScanReport* iatHooksReport = dynamic_cast<IATScanReport*>(mod);
+	if (iatHooksReport) {
+		std::string imports_not_rec_file = modDumpReport->dumpFileName + ".iat_hooks.txt";
+		
+		if (iatHooksReport->generateList(imports_not_rec_file, processHandle, modulesInfo, exportsMap)) {
+			modDumpReport->iatHooksFileName = imports_not_rec_file;
+		}
 	}
 	if (modDumpReport->isDumped) {
 		std::string tags_file = modDumpReport->dumpFileName + ".tag";

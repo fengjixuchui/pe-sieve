@@ -19,6 +19,7 @@
 #define PARAM_PID "pid"
 #define PARAM_SHELLCODE "shellc"
 #define PARAM_DATA "data"
+#define PARAM_IAT "iat"
 #define PARAM_MODULES_FILTER "mfilter"
 #define PARAM_MODULES_IGNORE "mignore"
 //dump options:
@@ -64,6 +65,12 @@ void print_help()
 	print_in_color(hdr_color, "\nOptional: \n");
 
 	print_in_color(separator_color, "\n---scan options---\n");
+	print_param_in_color(param_color, PARAM_IAT);
+	std::cout << " <*scan_mode>\n\t: Scan for IAT hooks.\n";
+	std::cout << "*scan_mode:\n";
+	for (size_t i = 0; i < pesieve::PE_IATS_MODES_COUNT; i++) {
+		std::cout << "\t" << i << " - " << translate_iat_scan_mode((pesieve::t_iat_scan_mode) i) << "\n";
+	}
 
 	print_param_in_color(param_color, PARAM_SHELLCODE);
 	std::cout << "\t: Detect shellcode implants. (By default it detects PE only).\n";
@@ -280,6 +287,16 @@ int main(int argc, char *argv[])
 		else if (!strcmp(param, PARAM_SHELLCODE)) {
 			args.shellcode = true;
 		}
+		else if (!strcmp(param, PARAM_IAT)) {
+			args.iat = pesieve::PE_IATS_FILTERED;
+			if ((i + 1) < argc) {
+				char* mode_num = argv[i + 1];
+				if (isdigit(mode_num[0])) {
+					args.iat = (t_iat_scan_mode)atoi(mode_num);
+					++i;
+				}
+			}
+		}
 		else if (!strcmp(param, PARAM_DATA)) {
 			args.data = true;
 		}
@@ -296,14 +313,15 @@ int main(int argc, char *argv[])
 			return 0;
 		}
 	}
-	//if didn't received PID by explicit parameter, try to parse the first param of the app
-	if (args.pid == 0) {
-		if (info_req) {
+	// do not start scan if the info was requested:
+	if (info_req) {
 #ifdef _DEBUG
-			system("pause");
+		system("pause");
 #endif
-			return 0; // info requested, pid not given. finish.
-		}
+		return 0; // info requested, pid not given. finish.
+	}
+	// if didn't received PID by explicit parameter, try to parse the first param of the app
+	if (args.pid == 0) {
 		if (argc >= 2 && is_number(argv[1])) args.pid = get_number(argv[1]);
 		if (args.pid == 0) {
 			print_help();
