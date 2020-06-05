@@ -1,8 +1,8 @@
 // Scans for modified modules within the process of a given PID
 // author: hasherezade (hasherezade@gmail.com)
 
-#include <Windows.h>
-#include <Psapi.h>
+#include <windows.h>
+#include <psapi.h>
 #include <sstream>
 #include <fstream>
 
@@ -38,6 +38,7 @@
 #define PARAM_VERSION2 "ver"
 
 using namespace pesieve;
+using namespace pesieve::util;
 
 void print_in_color(int color, const std::string &text)
 {

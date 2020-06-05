@@ -21,10 +21,11 @@
 #include <locale>
 #include <codecvt>
 
-#include <Psapi.h>
+#include <psapi.h>
 #pragma comment(lib,"psapi.lib")
 
 using namespace pesieve;
+using namespace pesieve::util;
 
 t_scan_status ProcessScanner::scanForHollows(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report)
 {

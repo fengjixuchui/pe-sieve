@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Windows.h>
+#include <windows.h>
 #include <map>
 
 #include <peconv.h>
@@ -14,7 +14,7 @@ public:
 	{
 		this->processHandle = procHndl;
 		ZeroMemory(ignoredModules, _countof(ignoredModules));
-		delim_list_to_multi_sz(args.modules_ignored, PARAM_LIST_SEPARATOR, ignoredModules, _countof(ignoredModules));
+		pesieve::util::delim_list_to_multi_sz(args.modules_ignored, PARAM_LIST_SEPARATOR, ignoredModules, _countof(ignoredModules));
 	}
 
 	~ProcessScanner()

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Windows.h>
-#include <Psapi.h>
+#include <windows.h>
+#include <psapi.h>
 #include <map>
 
 #include <peconv.h>
@@ -153,7 +153,7 @@ public:
 	{
 #ifdef _WIN64 //is the scanner 64 bit?
 		BOOL isWow64 = FALSE;
-		if (is_process_wow64(_procHndl, &isWow64)) {
+		if (pesieve::util::is_process_wow64(_procHndl, &isWow64)) {
 			is64bit = !isWow64;
 		}
 #endif

@@ -1,7 +1,7 @@
 #include "results_dumper.h"
 
-#include <Windows.h>
-#include <Psapi.h>
+#include <windows.h>
+#include <psapi.h>
 
 #include <fstream>
 
@@ -14,6 +14,8 @@
 #define DIR_SEPARATOR "\\"
 
 using namespace pesieve;
+using namespace pesieve::util;
+
 //---
 std::string get_payload_ext(const ArtefactScanReport& artefactRepot)
 {

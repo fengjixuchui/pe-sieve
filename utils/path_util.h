@@ -1,20 +1,25 @@
 #pragma once
 
-#include <Windows.h>
+#include <windows.h>
 #include <sstream>
 #include <iomanip>
 
-char* get_subpath_ptr(char *modulePath, char* searchedPath);
+namespace pesieve {
+	namespace util{
 
-// Add escape characters to path separators
-std::string escape_path_separators(std::string path);
+		char* get_subpath_ptr(char *modulePath, char* searchedPath);
 
-// Get system drive letter, i.e. "C:"
-std::string get_system_drive();
+		// Add escape characters to path separators
+		std::string escape_path_separators(std::string path);
 
-bool dir_exists(const char* path);
+		// Get system drive letter, i.e. "C:"
+		std::string get_system_drive();
 
-bool create_dir_recursively(const std::string& path);
+		bool dir_exists(const char* path);
 
-// Find given prefix in the string, and remove it if found. Case insensitive.
-std::string strip_prefix(std::string path, std::string prefix);
+		bool create_dir_recursively(const std::string& path);
+
+		// Find given prefix in the string, and remove it if found. Case insensitive.
+		std::string strip_prefix(std::string path, std::string prefix);
+	};
+};
