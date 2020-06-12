@@ -58,9 +58,14 @@ public:
 		appendToModulesList(report);
 	}
 
-	bool hasModuleContaining(ULONGLONG page_addr)
+	size_t getScannedSize(ULONGLONG address) const
 	{
-		if (modulesInfo.getModuleContaining(page_addr) == nullptr) {
+		return modulesInfo.getScannedSize(address);
+	}
+
+	bool hasModuleContaining(ULONGLONG page_addr, size_t size = 0)
+	{
+		if (modulesInfo.getModuleContaining(page_addr, size) == nullptr) {
 			return false;
 		}
 		return true;

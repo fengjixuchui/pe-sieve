@@ -10,6 +10,7 @@ bool ProcessModules::appendModule(LoadedModule* lModule)
 	}
 	ULONGLONG start_addr = lModule->start;
 	if (this->modulesMap.find(start_addr) != this->modulesMap.end()) {
+		//already exist
 		return false;
 	}
 	modulesMap[start_addr] = lModule;
@@ -26,17 +27,39 @@ void ProcessModules::deleteAll()
 	this->modulesMap.clear();
 }
 
-LoadedModule* ProcessModules::getModuleContaining(ULONGLONG address) const
+size_t ProcessModules::getScannedSize(ULONGLONG address) const
 {
 	std::map<ULONGLONG, LoadedModule*>::const_iterator start_itr = modulesMap.begin();
 	std::map<ULONGLONG, LoadedModule*>::const_iterator stop_itr = modulesMap.upper_bound(address);
 	std::map<ULONGLONG, LoadedModule*>::const_iterator itr = start_itr;
+
+	size_t max_size = 0;
+
+	for (; itr != stop_itr; ++itr) {
+		LoadedModule *module = itr->second;
+		if (address >= module->start && address < module->getEnd()) {
+			ULONGLONG diff = module->getEnd() - address;
+			if (diff > max_size) {
+				max_size = diff;
+			}
+		}
+	}
+	return max_size;
+}
+
+LoadedModule* ProcessModules::getModuleContaining(ULONGLONG address, size_t size) const
+{
+	std::map<ULONGLONG, LoadedModule*>::const_iterator start_itr = modulesMap.begin();
+	std::map<ULONGLONG, LoadedModule*>::const_iterator stop_itr = modulesMap.upper_bound(address);
+	std::map<ULONGLONG, LoadedModule*>::const_iterator itr = start_itr;
+	
+	const ULONGLONG end_addr = (size > 0)? address + (size - 1) : address;
+
 	for (; itr != stop_itr; ++itr ) {
 		LoadedModule *module = itr->second;
-
-		if (address >= module->start && address < module->end) {
+		if (address >= module->start && end_addr < module->getEnd()) {
 #ifdef _DEBUG
-			std::cout << "Addr: " << std::hex << address << " found in: " << module->start << " - " << module->end << std::endl;
+			std::cout << "Addr: " << std::hex << address << " found in: " << module->start << " - " << module->getEnd() << std::endl;
 #endif
 			return module;
 		}

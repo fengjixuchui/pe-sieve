@@ -61,31 +61,31 @@ WorkingSetScanReport* WorkingSetScanner::scanExecutableArea(MemPageData &memPage
 	if (!memPage.load()) {
 		return nullptr;
 	}
-	//shellcode found! now examin it with more details:
-	ArtefactScanner artefactScanner(this->processHandle, memPage);
-	WorkingSetScanReport *my_report = artefactScanner.scanRemote();
-	if (my_report) {
+	if (!isCode(memPage)) {
+		// shellcode patterns not found
+		return nullptr;
+	}
+	//shellcode found! now examine it with more details:
+	ArtefactScanner artefactScanner(this->processHandle, memPage, this->processReport);
+	WorkingSetScanReport *my_report1 = artefactScanner.scanRemote();
+	if (my_report1) {
 		//pe artefacts found
-		return my_report;
+		return my_report1;
 	}
 	if (!this->args.shellcode) {
 		// not a PE file, and we are not interested in shellcode, so just finish it here
 		return nullptr;
 	}
-	if (!isCode(memPage)) {
-		// shellcode patterns not found
-		return nullptr;
-	}
 	//report about shellcode:
 	ULONGLONG region_start = memPage.region_start;
 	const size_t region_size = size_t (memPage.region_end - region_start);
-	my_report = new WorkingSetScanReport(processHandle, (HMODULE)region_start, region_size, SCAN_SUSPICIOUS);
+	WorkingSetScanReport *my_report = new WorkingSetScanReport(processHandle, (HMODULE)region_start, region_size, SCAN_SUSPICIOUS);
 	my_report->has_pe = false;
 	my_report->has_shellcode = true;
 	return my_report;
 }
 
-bool WorkingSetScanner::scanDisconnectedImg()
+bool WorkingSetScanner::scanImg()
 {
 	bool show_info = (!args.quiet);
 #ifdef _DEBUG
@@ -94,13 +94,18 @@ bool WorkingSetScanner::scanDisconnectedImg()
 	const HMODULE module_start = (HMODULE)memPage.alloc_base;
 
 	if (this->processReport->hasModuleContaining((ULONGLONG)module_start)) {
-		if (this->processReport->hasModuleContaining(memPage.region_start)) {
+		const size_t region_size = (memPage.region_end) ? (memPage.region_end - memPage.region_start) : 0;
+
+		if (this->processReport->hasModuleContaining(memPage.region_start, region_size)) {
 #ifdef _DEBUG
-			std::cout << "[*] This area was already scanned: " << std::hex << memPage.region_start << std::endl;
+			std::cout << "[*] This area was already scanned: " << std::hex << memPage.region_start << " size: " << region_size << std::endl;
 #endif
 			// already scanned
 			return true;
 		}
+#ifdef _DEBUG
+		std::cout << "[*] Part of the area was not scanned yet: " << std::hex << memPage.region_start << " size: " << region_size << std::endl;
+#endif
 		//it may be a shellcode after the loaded PE
 		return false;
 	}
@@ -155,9 +160,11 @@ bool WorkingSetScanner::scanDisconnectedImg()
 WorkingSetScanReport* WorkingSetScanner::scanRemote()
 {
 	if (!memPage.isInfoFilled() && !memPage.fillInfo()) {
+#ifdef _DEBUG
+		std::cout << "[!] Could not fill: " << std::hex << memPage.start_va << " to: " << memPage.region_end << "\n";
+#endif
 		return nullptr;
 	}
-
 	// is the page executable?
 	bool is_any_exec = isExecutable(memPage);
 	if (!is_any_exec) {
@@ -171,19 +178,16 @@ WorkingSetScanReport* WorkingSetScanner::scanRemote()
 	}
 
 	if (memPage.mapping_type == MEM_IMAGE) {
-
+		const bool scan_image = true;
 		const bool is_peb_module = memPage.loadModuleName();
 		const bool is_mapped_name = memPage.loadMappedName();
-		if (is_peb_module && is_mapped_name) {
-			//probably legit: it was scanned during the modules scan
-			return nullptr;
-		}
-		if (!is_peb_module) {
+
+		if (scan_image) {
 #ifdef _DEBUG
 			std::cout << "[!] Detected a disconnected MEM_IMG: " << memPage.region_start << std::endl;
 #endif
-			if (scanDisconnectedImg()) {
-				return nullptr; //scanned as a disconnected PE module
+			if (scanImg()) {
+				return nullptr; // already scanned as a PE module
 			}
 			//scanning as disconnected module failed, continue scanning as an implant
 #ifdef _DEBUG
