@@ -48,7 +48,6 @@ bool ModuleData::_loadOriginal(bool disableFSredir)
 #endif
 	}
 	original_module = peconv::load_pe_module(szModName, original_size, false, false);
-
 	if (isRedirDisabled) {
 		wow64_revert_fs_redirection(old_val);
 	}
@@ -160,12 +159,6 @@ bool RemoteModuleData::init()
 		return false;
 	}
 	this->isHdrReady = true;
-
-	if (this->isFullImg) {
-		if (!loadFullImage()) {
-			return false;
-		}
-	}
 	return true;
 }
 
@@ -174,7 +167,7 @@ bool RemoteModuleData::loadFullImage()
 	if (this->isFullImageLoaded()) {
 		return true;
 	}
-	size_t mod_size = this->getModuleSize();
+	size_t mod_size = this->getHdrImageSize();
 	this->imgBuffer = peconv::alloc_pe_buffer(mod_size, PAGE_READWRITE);
 	if (!imgBuffer) {
 		return false;

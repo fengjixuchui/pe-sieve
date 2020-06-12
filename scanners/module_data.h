@@ -103,9 +103,9 @@ public:
 	static std::string getModuleName(HANDLE _processHandle, HMODULE _modBaseAddr);
 	static std::string getMappedName(HANDLE _processHandle, LPVOID _modBaseAddr);
 
-	RemoteModuleData(HANDLE _processHandle, HMODULE _modBaseAddr, bool full_image = false)
+	RemoteModuleData(HANDLE _processHandle, HMODULE _modBaseAddr)
 		: processHandle(_processHandle), modBaseAddr(_modBaseAddr),
-		isFullImg(full_image), imgBuffer(nullptr), imgBufferSize(0)
+		imgBuffer(nullptr), imgBufferSize(0)
 	{
 		isHdrReady = false;
 		memset(headerBuffer, 0, peconv::MAX_HEADER_SIZE);
@@ -124,13 +124,10 @@ public:
 		if (!isHdrReady && !init()) {
 			return false;
 		}
-		if (isFullImg && !this->isFullImageLoaded()) {
-			return false;
-		}
 		return true;
 	}
 
-	size_t getModuleSize()
+	size_t getHdrImageSize()
 	{
 		if (!isHdrReady) return 0;
 		return peconv::get_image_size((const BYTE*) headerBuffer);
@@ -140,6 +137,14 @@ public:
 	{
 		if (!isHdrReady) return 0;
 		return peconv::get_image_base((const BYTE*)headerBuffer);
+	}
+	
+	size_t getModuleSize()
+	{
+		if (imgBufferSize) {
+			return imgBufferSize;
+		}
+		return getHdrImageSize();
 	}
 
 	size_t getHeaderSize()
@@ -173,7 +178,6 @@ protected:
 
 private:
 	bool isHdrReady;
-	bool isFullImg; //read full PE to the buffer
 
 	friend class PeSection;
 	friend class IATScanner;
