@@ -1,18 +1,54 @@
 #include "pe_buffer.h"
 
 #include <iostream>
+#include "../scanners/artefact_scanner.h"
 
-bool PeBuffer::readRemote(HANDLE process_hndl, ULONGLONG module_base, size_t pe_vsize)
+size_t pesieve::PeBuffer::calcRemoteImgSize(HANDLE processHandle, ULONGLONG modBaseAddr)
+{
+	const size_t hdr_buffer_size = PAGE_SIZE;
+	BYTE hdr_buffer[hdr_buffer_size] = { 0 };
+	size_t pe_vsize = 0;
+
+	PIMAGE_SECTION_HEADER hdr_ptr = NULL;
+	if (peconv::read_remote_pe_header(processHandle, (BYTE*)modBaseAddr, hdr_buffer, hdr_buffer_size)) {
+		hdr_ptr = peconv::get_section_hdr(hdr_buffer, hdr_buffer_size, 0);
+	}
+	if (!hdr_ptr) {
+		pe_vsize = peconv::fetch_region_size(processHandle, (PBYTE)modBaseAddr);
+		//std::cout << "[!] Image size at: " << std::hex << modBaseAddr << " undetermined, using region size instead: " << pe_vsize << std::endl;
+		return pe_vsize;
+	}
+	pe_vsize = ArtefactScanner::calcImgSize(processHandle, (HMODULE)modBaseAddr, hdr_buffer, hdr_buffer_size, hdr_ptr);
+	//std::cout << "[!] Image size at: " << std::hex << modBaseAddr << " undetermined, using calculated img size: " << pe_vsize << std::endl;
+	return pe_vsize;
+}
+
+bool pesieve::PeBuffer::readRemote(HANDLE process_hndl, ULONGLONG module_base, size_t pe_vsize)
 {
 	if (pe_vsize == 0) {
-		pe_vsize = peconv::fetch_region_size(process_hndl, (PBYTE)module_base);
-		std::cout << "[!] Image size at: " << std::hex << module_base << " undetermined, using region size instead: " << pe_vsize << std::endl;
+		// if not size supplied, try with the size fetched from the header
+		pe_vsize = peconv::get_remote_image_size(process_hndl, (BYTE*)module_base);
+	}
+	if (_readRemote(process_hndl, module_base, pe_vsize)) {
+		return true; //success
+	}
+	// try with the calculated size
+	pe_vsize = calcRemoteImgSize(process_hndl, module_base);
+	std::cout << "[!] Image size at: " << std::hex << module_base << " undetermined, using calculated size: " << pe_vsize << std::endl;
+	return _readRemote(process_hndl, module_base, pe_vsize);
+}
+
+bool  pesieve::PeBuffer::_readRemote(HANDLE process_hndl, ULONGLONG module_base, size_t pe_vsize)
+{
+	if (pe_vsize == 0) {
+		return false;
 	}
 	if (!allocBuffer(pe_vsize)) {
 		return false;
 	}
 	size_t read_size = peconv::read_remote_area(process_hndl, (BYTE*)module_base, vBuf, pe_vsize);
-	if (read_size == 0) {
+	if (read_size != pe_vsize) {
+		std::cout << "[!] Failed reading Image at: " << std::hex << module_base << " img size: " << pe_vsize << std::endl;
 		freeBuffer();
 		return false;
 	}
@@ -21,7 +57,7 @@ bool PeBuffer::readRemote(HANDLE process_hndl, ULONGLONG module_base, size_t pe_
 	return true;
 }
 
-bool PeBuffer::resizeBuffer(size_t new_size)
+bool pesieve::PeBuffer::resizeBuffer(size_t new_size)
 {
 	if (!vBuf) return false;
 
@@ -42,7 +78,7 @@ bool PeBuffer::resizeBuffer(size_t new_size)
 	return true;
 }
 
-bool PeBuffer::resizeLastSection(size_t new_img_size)
+bool  pesieve::PeBuffer::resizeLastSection(size_t new_img_size)
 {
 	if (!vBuf) return false;
 
@@ -72,7 +108,7 @@ bool PeBuffer::resizeLastSection(size_t new_img_size)
 	return true;
 }
 
-bool PeBuffer::dumpPeToFile(
+bool pesieve::PeBuffer::dumpPeToFile(
 	IN std::string dumpFileName,
 	IN OUT peconv::t_pe_dump_mode &dumpMode,
 	IN OPTIONAL const peconv::ExportsMapper* exportsMap,
@@ -109,7 +145,7 @@ bool PeBuffer::dumpPeToFile(
 	return peconv::dump_pe(dumpFileName.c_str(), this->vBuf, this->vBufSize, this->relocBase, dumpMode);
 }
 
-bool PeBuffer::dumpToFile(IN std::string dumpFileName)
+bool pesieve::PeBuffer::dumpToFile(IN std::string dumpFileName)
 {
 	if (!vBuf) return false;
 	return peconv::dump_to_file(dumpFileName.c_str(), vBuf, vBufSize);

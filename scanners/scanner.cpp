@@ -27,7 +27,7 @@
 using namespace pesieve;
 using namespace pesieve::util;
 
-t_scan_status ProcessScanner::scanForHollows(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report)
+t_scan_status pesieve::ProcessScanner::scanForHollows(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report)
 {
 	BOOL isWow64 = FALSE;
 #ifdef _WIN64
@@ -66,7 +66,7 @@ t_scan_status ProcessScanner::scanForHollows(HANDLE processHandle, ModuleData& m
 	return is_suspicious;
 }
 
-t_scan_status ProcessScanner::scanForIATHooks(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report, bool filter)
+t_scan_status pesieve::ProcessScanner::scanForIATHooks(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report, bool filter)
 {
 	const peconv::ExportsMapper *expMap = process_report->exportsMap;
 	if (!expMap) {
@@ -89,7 +89,7 @@ t_scan_status ProcessScanner::scanForIATHooks(HANDLE processHandle, ModuleData& 
 	return scan_res;
 }
 
-t_scan_status ProcessScanner::scanForHooks(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report)
+t_scan_status pesieve::ProcessScanner::scanForHooks(HANDLE processHandle, ModuleData& modData, RemoteModuleData &remoteModData, ProcessScanReport* process_report)
 {
 	CodeScanner hooks(processHandle, modData, remoteModData);
 
@@ -108,7 +108,7 @@ t_scan_status ProcessScanner::scanForHooks(HANDLE processHandle, ModuleData& mod
 	return is_hooked;
 }
 
-bool ProcessScanner::resolveHooksTargets(ProcessScanReport& process_report)
+bool pesieve::ProcessScanner::resolveHooksTargets(ProcessScanReport& process_report)
 {
 	HookTargetResolver hookResolver(process_report, this->processHandle);
 	const std::set<ModuleScanReport*> &code_reports = process_report.reportsByType[ProcessScanReport::REPORT_CODE_SCAN];
@@ -116,7 +116,7 @@ bool ProcessScanner::resolveHooksTargets(ProcessScanReport& process_report)
 	return (resolved_count > 0);
 }
 
-ProcessScanReport* ProcessScanner::scanRemote()
+ProcessScanReport* pesieve::ProcessScanner::scanRemote()
 {
 	this->isDEP = is_DEP_enabled(this->processHandle);
 	ProcessScanReport *pReport = new ProcessScanReport(this->args.pid);
@@ -168,7 +168,7 @@ ProcessScanReport* ProcessScanner::scanRemote()
 	return pReport;
 }
 
-size_t ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws exceptions
+size_t pesieve::ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws exceptions
 {
 	PSAPI_WORKING_SET_INFORMATION wsi_1 = { 0 };
 	BOOL result = QueryWorkingSet(this->processHandle, (LPVOID)&wsi_1, sizeof(PSAPI_WORKING_SET_INFORMATION));
@@ -180,9 +180,7 @@ size_t ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws excep
 	std::cout << "Number of entries: " << std::dec << wsi_1.NumberOfEntries << std::endl;
 #endif
 
-#ifdef _DEBUG
 	DWORD start_tick = GetTickCount();
-#endif
 	std::set<ULONGLONG> region_bases;
 	size_t pages_count = enum_workingset(processHandle, region_bases);
 	if (!args.quiet) {
@@ -195,17 +193,7 @@ size_t ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws excep
 		const ULONGLONG region_base = *set_itr;
 
 		MemPageData memPage(this->processHandle, region_base);
-		const size_t scanned_size = pReport.getScannedSize(region_base);
-		const size_t region_size = (memPage.region_end > region_base) ? (memPage.region_end - region_base) : 0;
-		if (scanned_size && region_size == scanned_size) {
-			continue;
-		}
-		if (scanned_size && region_size > scanned_size) {
-			//if (!args.quiet) 
-				std::cout << std::hex << memPage.region_start << ": Part of this region was already scanned: " << scanned_size << " vs: " << region_size << "\n";
-			region_bases.insert(memPage.region_start + scanned_size);
-			continue;
-		}
+
 		memPage.is_listed_module = pReport.hasModule(region_base);
 		memPage.is_dep_enabled = this->isDEP;
 
@@ -226,15 +214,14 @@ size_t ProcessScanner::scanWorkingSet(ProcessScanReport &pReport) //throws excep
 
 		pReport.appendReport(my_report);
 	}
-#ifdef _DEBUG
-	DWORD total_time = GetTickCount() - start_tick;
-	std::cout << "Workingset scan time: " << std::dec << total_time << std::endl;
-#endif
-
+	if (!args.quiet) {
+		DWORD total_time = GetTickCount() - start_tick;
+		std::cout << "[*] Workingset scanned in " << std::dec << total_time << " ms" << std::endl;
+	}
 	return counter;
 }
 
-ModuleScanReport* ProcessScanner::scanForMappingMismatch(ModuleData& modData, ProcessScanReport& process_report)
+ModuleScanReport* pesieve::ProcessScanner::scanForMappingMismatch(ModuleData& modData, ProcessScanReport& process_report)
 {
 	MappingScanner mappingScanner(processHandle, modData);
 
@@ -244,7 +231,7 @@ ModuleScanReport* ProcessScanner::scanForMappingMismatch(ModuleData& modData, Pr
 	return scan_report;
 }
 
-size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws exceptions
+size_t pesieve::ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws exceptions
 {
 	HMODULE hMods[1024];
 	const size_t modules_count = enum_modules(this->processHandle, hMods, sizeof(hMods), args.modules_filter);
@@ -261,19 +248,7 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 
 		//load module from file:
 		ModuleData modData(processHandle, hMods[counter]);
-
-		// Don't scan modules that are in the ignore list
-		std::string plainName = peconv::get_file_name(modData.szModName);
-		if (is_in_list(plainName.c_str(), this->ignoredModules)) {
-			// ...but add such modules to the exports lookup:
-			if (pReport.exportsMap && modData.loadOriginal()) {
-				pReport.exportsMap->add_to_lookup(modData.szModName, (HMODULE)modData.original_module, (ULONGLONG)modData.moduleHandle);
-			}
-			continue;
-		}
-
 		ModuleScanReport *mappingScanReport = this->scanForMappingMismatch(modData, pReport);
-
 		if (!modData.loadOriginal()) {
 			if (!args.quiet) {
 				std::cout << "[!][" << args.pid << "] Suspicious: could not read the module file!" << std::endl;
@@ -282,10 +257,23 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 			pReport.appendReport(new UnreachableModuleReport(processHandle, hMods[counter], 0, modData.szModName));
 			continue;
 		}
+
+		// Don't scan modules that are in the ignore list
+		std::string plainName = peconv::get_file_name(modData.szModName);
+		if (is_in_list(plainName.c_str(), this->ignoredModules)) {
+			// ...but add such modules to the exports lookup:
+			if (pReport.exportsMap && modData.loadOriginal()) {
+				pReport.exportsMap->add_to_lookup(modData.szModName, (HMODULE)modData.original_module, (ULONGLONG)modData.moduleHandle);
+			}
+			if (!args.quiet) {
+				std::cout << "[*] Skipping ignored: " << std::hex << (ULONGLONG)modData.moduleHandle << " : " << modData.szModName << std::endl;
+			}
+			pReport.appendReport(new SkippedModuleReport(processHandle, modData.moduleHandle, modData.original_size, modData.szModName));
+			continue;
+		}
 		if (!args.quiet) {
 			std::cout << "[*] Scanning: " << modData.szModName << std::endl;
 		}
-
 		if (modData.isDotNet()) {
 #ifdef _DEBUG
 			std::cout << "[*] Skipping a .NET module: " << modData.szModName << std::endl;
@@ -319,7 +307,7 @@ size_t ProcessScanner::scanModules(ProcessScanReport &pReport)  //throws excepti
 	return counter;
 }
 
-size_t ProcessScanner::scanModulesIATs(ProcessScanReport &pReport) //throws exceptions
+size_t pesieve::ProcessScanner::scanModulesIATs(ProcessScanReport &pReport) //throws exceptions
 {
 	if (!pReport.exportsMap) {
 		return 0; // this feature cannot work without Exports Map

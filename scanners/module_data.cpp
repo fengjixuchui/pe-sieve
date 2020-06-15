@@ -3,6 +3,7 @@
 #include "../utils/format_util.h"
 #include "../utils/path_converter.h"
 #include "../utils/process_util.h"
+#include "artefact_scanner.h"
 
 #include <psapi.h>
 #pragma comment(lib,"psapi.lib")
@@ -10,9 +11,9 @@
 using namespace pesieve::util;
 
 //---
-bool ModuleData::loadModuleName()
+bool pesieve::ModuleData::loadModuleName()
 {
-	std::string my_name = RemoteModuleData::getModuleName(processHandle, this->moduleHandle);
+	std::string my_name = pesieve::RemoteModuleData::getModuleName(processHandle, this->moduleHandle);
 	if (my_name.length() == 0 || my_name.length() > MAX_PATH) {
 		//invalid length
 		return false;
@@ -21,7 +22,7 @@ bool ModuleData::loadModuleName()
 	return true;
 }
 
-bool ModuleData::loadOriginal()
+bool pesieve::ModuleData::loadOriginal()
 {
 	//disable FS redirection by default
 	if (_loadOriginal(true)) {
@@ -31,7 +32,7 @@ bool ModuleData::loadOriginal()
 	return _loadOriginal(false);
 }
 
-bool ModuleData::_loadOriginal(bool disableFSredir)
+bool pesieve::ModuleData::_loadOriginal(bool disableFSredir)
 {
 	if (strlen(this->szModName) == 0) {
 		loadModuleName();
@@ -58,7 +59,7 @@ bool ModuleData::_loadOriginal(bool disableFSredir)
 	return true;
 }
 
-bool ModuleData::relocateToBase(ULONGLONG new_base)
+bool pesieve::ModuleData::relocateToBase(ULONGLONG new_base)
 {
 	if (!original_module) return false;
 
@@ -78,7 +79,7 @@ bool ModuleData::relocateToBase(ULONGLONG new_base)
 	return true;
 }
 
-bool ModuleData::switchToWow64Path()
+bool pesieve::ModuleData::switchToWow64Path()
 {
 	BOOL isWow64 = FALSE;
 	if (!is_process_wow64(this->processHandle, &isWow64)) {
@@ -91,7 +92,7 @@ bool ModuleData::switchToWow64Path()
 	return false;
 }
 
-bool ModuleData::reloadWow64()
+bool pesieve::ModuleData::reloadWow64()
 {
 	if (!switchToWow64Path()) return false;
 
@@ -104,7 +105,7 @@ bool ModuleData::reloadWow64()
 	return true;
 }
 
-bool ModuleData::isDotNetManagedCode()
+bool pesieve::ModuleData::isDotNetManagedCode()
 {
 	//has a directory entry for .NET header
 	IMAGE_DATA_DIRECTORY* dotNetDir = peconv::get_directory_entry(this->original_module, IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR);
@@ -124,7 +125,7 @@ bool ModuleData::isDotNetManagedCode()
 
 //----
 
-std::string RemoteModuleData::getModuleName(HANDLE processHandle, HMODULE modBaseAddr)
+std::string pesieve::RemoteModuleData::getModuleName(HANDLE processHandle, HMODULE modBaseAddr)
 {
 	char filename[MAX_PATH] = { 0 };
 	if (!GetModuleFileNameExA(processHandle, modBaseAddr, filename, MAX_PATH)) {
@@ -138,7 +139,7 @@ std::string RemoteModuleData::getModuleName(HANDLE processHandle, HMODULE modBas
 	return expanded;
 }
 
-std::string RemoteModuleData::getMappedName(HANDLE processHandle, LPVOID modBaseAddr)
+std::string pesieve::RemoteModuleData::getMappedName(HANDLE processHandle, LPVOID modBaseAddr)
 {
 	char filename[MAX_PATH] = { 0 };
 	if (!GetMappedFileNameA(processHandle, modBaseAddr, filename, MAX_PATH) != 0) {
@@ -152,7 +153,7 @@ std::string RemoteModuleData::getMappedName(HANDLE processHandle, LPVOID modBase
 	return expanded;
 }
 
-bool RemoteModuleData::init()
+bool pesieve::RemoteModuleData::init()
 {
 	this->isHdrReady = false;
 	if (!loadHeader()) {
@@ -162,16 +163,12 @@ bool RemoteModuleData::init()
 	return true;
 }
 
-bool RemoteModuleData::loadFullImage()
+bool pesieve::RemoteModuleData::_loadFullImage(size_t mod_size)
 {
 	if (this->isFullImageLoaded()) {
 		return true;
 	}
-	size_t mod_size = this->getHdrImageSize();
 	this->imgBuffer = peconv::alloc_pe_buffer(mod_size, PAGE_READWRITE);
-	if (!imgBuffer) {
-		return false;
-	}
 	this->imgBufferSize = peconv::read_remote_pe(this->processHandle, (PBYTE)this->modBaseAddr, mod_size, this->imgBuffer, mod_size);
 	if (this->imgBufferSize == mod_size) {
 		return true;
@@ -180,7 +177,21 @@ bool RemoteModuleData::loadFullImage()
 	return false;
 }
 
-bool RemoteModuleData::loadHeader()
+bool pesieve::RemoteModuleData::loadFullImage()
+{
+	if (this->isFullImageLoaded()) {
+		return true;
+	}
+	size_t mod_size = this->getHdrImageSize();
+	if (_loadFullImage(mod_size)) {
+		return true;
+	}
+	//try again with calculated size:
+	mod_size = calcImgSize();
+	return _loadFullImage(mod_size);
+}
+
+bool pesieve::RemoteModuleData::loadHeader()
 {
 	SIZE_T read_size = 0;
 	if (!peconv::read_remote_pe_header(this->processHandle, (PBYTE)this->modBaseAddr, this->headerBuffer, peconv::MAX_HEADER_SIZE)) {
@@ -189,7 +200,7 @@ bool RemoteModuleData::loadHeader()
 	return true;
 }
 
-ULONGLONG RemoteModuleData::getRemoteSectionVa(const size_t section_num)
+ULONGLONG pesieve::RemoteModuleData::getRemoteSectionVa(const size_t section_num)
 {
 	if (!this->isInitialized()) return NULL;
 
@@ -200,7 +211,7 @@ ULONGLONG RemoteModuleData::getRemoteSectionVa(const size_t section_num)
 	return (ULONGLONG) modBaseAddr + section_hdr->VirtualAddress;
 }
 
-bool RemoteModuleData::isSectionExecutable(size_t section_number)
+bool pesieve::RemoteModuleData::isSectionExecutable(size_t section_number)
 {
 	//for special cases when the section is not set executable in headers, but in reality is executable...
 	//get the section header from the module:
@@ -243,7 +254,7 @@ bool RemoteModuleData::isSectionExecutable(size_t section_number)
 	return is_any_exec;
 }
 
-bool RemoteModuleData::hasExecutableSection()
+bool pesieve::RemoteModuleData::hasExecutableSection()
 {
 	size_t sec_count = peconv::get_sections_count(this->headerBuffer, peconv::MAX_HEADER_SIZE);
 	for (size_t i = 0; i < sec_count ; i++) {
@@ -252,4 +263,12 @@ bool RemoteModuleData::hasExecutableSection()
 		}
 	}
 	return false;
+}
+
+//calculate image size basing on the sizes of sections
+size_t pesieve::RemoteModuleData::calcImgSize()
+{
+	if (!isHdrReady) return 0;
+
+	return ArtefactScanner::calcImgSize(this->processHandle, this->modBaseAddr, this->headerBuffer, peconv::MAX_HEADER_SIZE);
 }
