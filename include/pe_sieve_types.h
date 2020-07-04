@@ -44,9 +44,18 @@ namespace pesieve {
 		PE_IATS_MODES_COUNT
 	} t_iat_scan_mode;
 
+	typedef enum {
+		PE_DNET_AUTO = 0,// treat .NET modules the same as native modules
+		PE_DNET_SKIP_SHC = 1, // skip shellcodes in .NET modules
+		PE_DNET_SKIP_HOOKS = 2, // skip hooks in .NET modules
+		PE_DNET_SKIP_SHC_AND_HOOKS = 3,
+		PE_DNET_COUNT
+	} t_dotnet_policy;
+
 	typedef struct {
 		DWORD pid;
 		DWORD modules_filter;
+		t_dotnet_policy dotnet_policy; // policy for scanning .NET modules
 		t_imprec_mode imprec_mode; //import recovery mode
 		bool quiet; // do not print log on the stdout
 		t_output_filter out_filter;
@@ -72,7 +81,9 @@ namespace pesieve {
 		DWORD detached; // cannot find the file corresponding to the module in memory
 		DWORD patched; // detected modifications in the code
 		DWORD iat_hooked; // detected IAT hooks
-		DWORD implanted; // the full PE was probably loaded manually
+		DWORD implanted; // all implants: shellcodes + PEs
+		DWORD implanted_pe; // the full PE was probably loaded manually
+		DWORD implanted_shc; //implanted shellcodes
 		DWORD skipped; // some of the modules must be skipped (i.e. dotNET managed code have different characteristics and this scan does not apply)
 		DWORD errors; // errors prevented the scan
 	} t_report;

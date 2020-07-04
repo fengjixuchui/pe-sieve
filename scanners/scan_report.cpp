@@ -4,6 +4,7 @@
 #include "code_scanner.h"
 #include "iat_scanner.h"
 #include "workingset_scanner.h"
+#include "artefact_scanner.h"
 #include "mapping_scanner.h"
 
 #include "../utils/format_util.h"
@@ -82,6 +83,9 @@ pesieve::ProcessScanReport::t_report_type pesieve::ProcessScanReport::getReportT
 		return pesieve::ProcessScanReport::REPORT_HEADERS_SCAN;
 	}
 	if (dynamic_cast<WorkingSetScanReport*>(report)) {
+		if (dynamic_cast<ArtefactScanReport*>(report)) {
+			return pesieve::ProcessScanReport::REPORT_ARTEFACT_SCAN;
+		}
 		return pesieve::ProcessScanReport::REPORT_MEMPAGE_SCAN;
 	}
 	if (dynamic_cast<MappingScanReport*>(report)) {
@@ -159,8 +163,8 @@ pesieve::t_report pesieve::ProcessScanReport::generateSummary() const
 	summary.skipped = static_cast<DWORD>(this->reportsByType[REPORT_SKIPPED_SCAN].size());
 	summary.scanned = static_cast<DWORD>(this->reportsByType[REPORT_HEADERS_SCAN].size());
 
-	std::vector<ModuleScanReport*>::const_iterator itr = module_reports.begin();
-	for (; itr != module_reports.end(); ++itr) {
+	std::vector<ModuleScanReport*>::const_iterator itr = moduleReports.begin();
+	for (; itr != moduleReports.end(); ++itr) {
 		ModuleScanReport* report = *itr;
 		if (ModuleScanReport::get_scan_status(report) == SCAN_SUSPICIOUS) {
 			summary.suspicious++;
@@ -172,21 +176,23 @@ pesieve::t_report pesieve::ProcessScanReport::generateSummary() const
 	summary.replaced = countHdrsReplaced();
 	summary.patched = countSuspiciousPerType(REPORT_CODE_SCAN);
 	summary.iat_hooked = countSuspiciousPerType(REPORT_IAT_SCAN);
-	summary.implanted = countSuspiciousPerType(REPORT_MEMPAGE_SCAN);
+	summary.implanted_shc = countSuspiciousPerType(REPORT_MEMPAGE_SCAN);
+	summary.implanted_pe = countSuspiciousPerType(REPORT_ARTEFACT_SCAN);
+	summary.implanted = summary.implanted_shc + summary.implanted_pe;
 	summary.hdr_mod = countSuspiciousPerType(REPORT_HEADERS_SCAN) - summary.replaced;
 	summary.detached = countSuspiciousPerType(REPORT_UNREACHABLE_SCAN);
 	
 	return summary;
 }
 
-std::string pesieve::ProcessScanReport::list_modules(size_t level, const pesieve::ProcessScanReport::t_report_filter &filter) const
+std::string pesieve::ProcessScanReport::listModules(size_t level, const pesieve::ProcessScanReport::t_report_filter &filter) const
 {
 	std::stringstream stream;
 	//summary:
 	OUT_PADDED(stream, level, "\"scans\" : [\n");
 	bool is_first = true;
 	std::vector<ModuleScanReport*>::const_iterator itr;
-	for (itr = this->module_reports.begin(); itr != this->module_reports.end(); ++itr) {
+	for (itr = this->moduleReports.begin(); itr != this->moduleReports.end(); ++itr) {
 		ModuleScanReport *mod = *itr;
 		if (is_shown_type(mod->status, filter)) {
 			if (!is_first) {
@@ -199,7 +205,7 @@ std::string pesieve::ProcessScanReport::list_modules(size_t level, const pesieve
 			is_first = false;
 		}
 	}
-	if (module_reports.size()) {
+	if (moduleReports.size()) {
 		stream << "\n";
 	}
 	OUT_PADDED(stream, level, "]\n");
@@ -240,15 +246,17 @@ const bool pesieve::ProcessScanReport::toJSON(std::stringstream &stream, size_t 
 	stream << std::dec << report.hdr_mod << ",\n";
 	OUT_PADDED(stream, level + 2, "\"detached\" : ");
 	stream << std::dec << report.detached << ",\n";
-	OUT_PADDED(stream, level + 2, "\"implanted\" : ");
-	stream << std::dec << report.implanted << ",\n";
+	OUT_PADDED(stream, level + 2, "\"implanted_pe\" : ");
+	stream << std::dec << report.implanted_pe << ",\n";
+	OUT_PADDED(stream, level + 2, "\"implanted_shc\" : ");
+	stream << std::dec << report.implanted_shc << ",\n";
 	OUT_PADDED(stream, level + 2, "\"other\" : ");
 	stream << std::dec << other << "\n";
 	OUT_PADDED(stream, level + 1, "},\n"); // modified
 	OUT_PADDED(stream, level + 1, "\"errors\" : ");
 	stream << std::dec << report.errors << "\n";
 	OUT_PADDED(stream, level, "},\n"); // scanned
-	stream << list_modules(level, filter);
+	stream << listModules(level, filter);
 	stream << "}\n";
 	return true;
 }
