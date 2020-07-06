@@ -40,20 +40,37 @@ bool pesieve::WorkingSetScanner::isExecutable(MemPageData &memPageData)
 		|| (memPage.protection & PAGE_EXECUTE_WRITECOPY);
 	if (is_any_exec) return true;
 
-	if (this->args.data) {
-		is_any_exec = isPotentiallyExecutable(memPageData);
-	}
+	is_any_exec = isPotentiallyExecutable(memPageData, this->args.data);
 	return is_any_exec;
 }
 
-bool pesieve::WorkingSetScanner::isPotentiallyExecutable(MemPageData &memPageData)
+bool pesieve::WorkingSetScanner::isPotentiallyExecutable(MemPageData &memPageData, const t_data_scan_mode &mode)
 {
-	bool is_any_exec = false;
-	if (!memPage.is_dep_enabled) {
-		//DEP is disabled, check also pages that are readable
-		is_any_exec = (memPage.protection & PAGE_READWRITE)
-			|| (memPage.protection & PAGE_READONLY);
+	if (mode == pesieve::PE_DATA_NO_SCAN) {
+		return false;
 	}
+
+	const bool is_managed = (this->processReport) ? this->processReport->isManagedProcess() : false;
+
+	if (mode == pesieve::PE_DATA_SCAN_NO_DEP 
+		&& memPage.is_dep_enabled && !is_managed)
+	{
+		return false;
+	}
+	if (mode == pesieve::PE_DATA_SCAN_DOTNET
+		&& !is_managed)
+	{
+		return false;
+	}
+	bool is_any_exec = false;
+
+	if (memPage.mapping_type == MEM_IMAGE) {
+		is_any_exec = (memPage.protection & SECTION_MAP_READ);
+
+		if (is_any_exec) return true;
+	}
+	is_any_exec = (memPage.protection & PAGE_READWRITE)
+		|| (memPage.protection & PAGE_READONLY);
 	return is_any_exec;
 }
 
@@ -62,11 +79,7 @@ WorkingSetScanReport* pesieve::WorkingSetScanner::scanExecutableArea(MemPageData
 	if (!memPage.load()) {
 		return nullptr;
 	}
-	if (!isCode(memPage)) {
-		// shellcode patterns not found
-		return nullptr;
-	}
-	//shellcode found! now examine it with more details:
+	// check for PE artifacts (regardless if it has shellcode patterns):
 	if (!isScannedAsModule(memPage)) {
 		ArtefactScanner artefactScanner(this->processHandle, memPage, this->processReport);
 		WorkingSetScanReport *my_report1 = artefactScanner.scanRemote();
@@ -77,6 +90,10 @@ WorkingSetScanReport* pesieve::WorkingSetScanner::scanExecutableArea(MemPageData
 	}
 	if (!this->args.shellcode) {
 		// not a PE file, and we are not interested in shellcode, so just finish it here
+		return nullptr;
+	}
+	if (!isCode(memPage)) {
+		// shellcode patterns not found
 		return nullptr;
 	}
 	//report about shellcode:

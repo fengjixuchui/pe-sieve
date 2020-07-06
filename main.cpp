@@ -49,6 +49,78 @@ void print_param_in_color(int color, const std::string &text)
 	print_in_color(color, PARAM_SWITCH1 + text);
 }
 
+bool is_param(const char *str)
+{
+	if (!str) return false;
+
+	const size_t len = strlen(str);
+	if (len < 2) return false;
+
+	if (str[0] == PARAM_SWITCH1 || str[0] == PARAM_SWITCH2) {
+		return true;
+	}
+	return false;
+}
+
+size_t copyToCStr(char *buf, size_t buf_max, const std::string &value)
+{
+	size_t len = value.length() + 1;
+	if (len > buf_max) len = buf_max;
+
+	memcpy(buf, value.c_str(), len);
+	buf[len] = '\0';
+	return len;
+}
+
+//TODO: this will be replaced when params will be refactored to use ParamKit
+template<typename PARAM_T>
+bool get_int_param(int argc, char *argv[], const char *param, int &param_i,
+	const char *param_id, PARAM_T &out_val, const PARAM_T default_set,
+	bool &info_req, void(*callback)(int))
+{
+	if (strcmp(param, param_id) != 0) {
+		return false;
+	}
+	out_val = default_set;
+	if ((param_i + 1) < argc && !is_param(argv[param_i + 1])) {
+		char* mode_num = argv[param_i + 1];
+		if (isdigit(mode_num[0])) {
+			out_val = (PARAM_T)atoi(mode_num);
+		}
+		else {
+			if (callback) {
+				callback(ERROR_COLOR);
+			}
+			info_req = true;
+		}
+		++param_i;
+	}
+	return true;
+}
+
+//TODO: this will be replaced when params will be refactored to use ParamKit
+bool get_cstr_param(int argc, char *argv[], const char *param, int &param_i,
+	const char *param_id, char* out_buf, const size_t out_buf_max,
+	bool &info_req, void(*callback)(int))
+{
+	if (strcmp(param, param_id) != 0) {
+		return false;
+	}
+	bool fetched = false;
+	if ((param_i + 1) < argc && !is_param(argv[param_i + 1])) {
+		if (argv[param_i + 1][0] != PARAM_HELP2[0]) {
+			copyToCStr(out_buf, out_buf_max, argv[param_i + 1]);
+			fetched = true;
+		}
+		++param_i;
+	}
+	if (!fetched) {
+		callback(ERROR_COLOR);
+		info_req = true;
+	}
+	return true;
+}
+
 void print_dnet_param(int param_color)
 {
 	print_param_in_color(param_color, PARAM_DOTNET_POLICY);
@@ -134,22 +206,38 @@ void print_refl_param(int param_color)
 	}
 }
 
+void print_data_param(int param_color)
+{
+	print_param_in_color(param_color, PARAM_DATA);
+	std::cout << " <*data_scan_mode>\n\t: Set if non-executable pages should be scanned.\n";
+	std::cout << "*data_scan_mode:\n";
+	for (DWORD i = 0; i < pesieve::PE_DATA_COUNT; i++) {
+		std::cout << "\t" << i << " - " << translate_data_mode((pesieve::t_data_scan_mode) i) << "\n";
+	}
+}
+
+void print_pid_param(int param_color)
+{
+	print_param_in_color(param_color, PARAM_PID);
+	std::cout << " <target_pid>\n\t: Set the PID of the target process.\n\t(decimal, or hexadecimal with '0x' prefix)\n";
+}
+
 void print_help()
 {
 	const int hdr_color = HEADER_COLOR;
 	const int param_color = HILIGHTED_COLOR;
 	const int separator_color = SEPARATOR_COLOR;
+
 	print_in_color(hdr_color, "Required: \n");
-	print_param_in_color(param_color, PARAM_PID);
-	std::cout << " <target_pid>\n\t: Set the PID of the target process.\n\t(decimal, or hexadecimal with '0x' prefix)\n";
+	print_pid_param(param_color);
+
 	print_in_color(hdr_color, "\nOptional: \n");
 
 	print_in_color(separator_color, "\n---scan options---\n");
 	print_iat_param(param_color);
 	print_shellc_param(param_color);
 
-	print_param_in_color(param_color, PARAM_DATA);
-	std::cout << "\t: If DEP is disabled scan also non-executable memory\n\t  (which potentially can be executed).\n";
+	print_data_param(param_color);
 #ifdef _WIN64
 	print_module_filter_param(param_color);
 #endif
@@ -241,29 +329,6 @@ void print_unknown_param(const char *param)
 	std::cout << param << "\n";
 }
 
-bool is_param(const char *str)
-{
-	if (!str) return false;
-
-	const size_t len = strlen(str);
-	if (len < 2) return false;
-
-	if (str[0] == PARAM_SWITCH1 || str[0] == PARAM_SWITCH2) {
-		return true;
-	}
-	return false;
-}
-
-size_t copyToCStr(char *buf, size_t buf_max, const std::string &value)
-{
-	size_t len = value.length() + 1;
-	if (len > buf_max) len = buf_max;
-
-	memcpy(buf, value.c_str(), len);
-	buf[len] = '\0';
-	return len;
-}
-
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -292,56 +357,41 @@ int main(int argc, char *argv[])
 			print_help();
 			info_req = true;
 		}
-		else if (!strcmp(param, PARAM_IMP_REC)) {
-			args.imprec_mode = PE_IMPREC_AUTO;
-			if ((i + 1) < argc) {
-				char* mode_num = argv[i + 1];
-				if (isdigit(mode_num[0])) {
-					args.imprec_mode = normalize_imprec_mode(atoi(mode_num));
-				}
-				else {
-					print_imprec_param(ERROR_COLOR);
-					info_req = true;
-				}
-				++i;
-			}
+		else if (get_int_param<DWORD>(argc, argv, param, i,
+			PARAM_PID,
+			args.pid,
+			0,
+			info_req,
+			print_pid_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_OUT_FILTER) && (i + 1) < argc) {
-			int mode = atoi(argv[i + 1]);
-			if (isdigit(argv[i + 1][0]) && mode <= LIST_MODULES_ALL) {
-				args.out_filter = static_cast<t_output_filter>(atoi(argv[i + 1]));
-			}
-			else {
-					print_out_filter_param(ERROR_COLOR);
-					info_req = true;
-				}
-				++i;
-			}
-		else if (!strcmp(param, PARAM_MODULES_FILTER) && (i + 1) < argc) {
-			args.modules_filter = LIST_MODULES_ALL;
-			int mode = atoi(argv[i + 1]);
-			if (isdigit(argv[i + 1][0]) && mode <= LIST_MODULES_ALL) {
-				args.modules_filter = mode;
-			}
-			else {
-				print_module_filter_param(ERROR_COLOR);
-				info_req = true;
-			}
-			++i;
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_IMP_REC,
+			args.imprec_mode,
+			pesieve::PE_IMPREC_AUTO,
+			info_req,
+			print_imprec_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_MODULES_IGNORE)) {
-			if ((i + 1) < argc && !is_param(argv[i + 1]) && argv[i + 1][0] != PARAM_HELP2[0]) {
-				copyToCStr(args.modules_ignored, MAX_MODULE_BUF_LEN, argv[i + 1]);
-				++i;
-			}
-			else {
-				print_mignore_param(ERROR_COLOR);
-				info_req = true;
-			}
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_OUT_FILTER,
+			args.out_filter,
+			pesieve::OUT_FULL,
+			info_req,
+			print_out_filter_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_PID) && (i + 1) < argc) {
-			args.pid = get_number(argv[i + 1]);
-			++i;
+		else if (get_cstr_param(argc, argv, param, i,
+			PARAM_MODULES_IGNORE,
+			args.modules_ignored,
+			MAX_MODULE_BUF_LEN,
+			info_req,
+			print_mignore_param))
+		{
+			continue;
 		}
 		else if (!strcmp(param, PARAM_VERSION) || !strcmp(param, PARAM_VERSION2)) {
 			std::cout << PESIEVE_VERSION << "\n";
@@ -356,76 +406,62 @@ int main(int argc, char *argv[])
 		else if (!strcmp(param, PARAM_MINIDUMP)) {
 			args.minidump = true;
 		}
-		else if (!strcmp(param, PARAM_SHELLCODE)) {
-			args.shellcode = true;
-			if ((i + 1) < argc && !is_param(argv[i + 1])) {
-				char* mode_num = argv[i + 1];
-				if (isdigit(mode_num[0])) {
-					args.shellcode = (atoi(mode_num) != 0) ? true : false;
-				}
-				else {
-					print_shellc_param(ERROR_COLOR);
-					info_req = true;
-				}
-				++i;
-			}
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_SHELLCODE,
+			args.shellcode,
+			true,
+			info_req,
+			print_shellc_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_REFLECTION)) {
-			args.make_reflection = true;
-			if ((i + 1) < argc && !is_param(argv[i + 1])) {
-				char* mode_num = argv[i + 1];
-				if (isdigit(mode_num[0])) {
-					args.shellcode = (atoi(mode_num) != 0) ? true : false;
-				}
-				else {
-					print_refl_param(ERROR_COLOR);
-					info_req = true;
-				}
-				++i;
-			}
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_REFLECTION,
+			args.make_reflection,
+			true,
+			info_req,
+			print_refl_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_IAT)) {
-			args.iat = pesieve::PE_IATS_FILTERED;
-			if ((i + 1) < argc) {
-				char* mode_num = argv[i + 1];
-				if (isdigit(mode_num[0])) {
-					args.iat = (t_iat_scan_mode)atoi(mode_num);
-				}
-				else {
-					print_iat_param(ERROR_COLOR);
-					info_req = true;
-				}
-				++i;
-			}
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_IAT,
+			args.iat,
+			pesieve::PE_IATS_FILTERED,
+			info_req,
+			print_iat_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_DOTNET_POLICY)) {
-			args.dotnet_policy = pesieve::PE_DNET_SKIP_SHC;
-			if ((i + 1) < argc) {
-				char* mode_num = argv[i + 1];
-				if (isdigit(mode_num[0])) {
-					args.dotnet_policy = (t_dotnet_policy)atoi(mode_num);
-				}
-				else {
-					print_dnet_param(ERROR_COLOR);
-					info_req = true;
-				}
-				++i;
-			}
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_DOTNET_POLICY,
+			args.dotnet_policy,
+			pesieve::PE_DNET_SKIP_SHC,
+			info_req,
+			print_dnet_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_DATA)) {
-			args.data = true;
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_DATA,
+			args.data,
+			pesieve::PE_DATA_SCAN_NO_DEP,
+			info_req,
+			print_data_param))
+		{
+			continue;
 		}
-		else if (!strcmp(param, PARAM_DUMP_MODE) && (i + 1) < argc) {
-			char* mode_num = argv[i + 1];
-			if (isdigit(mode_num[0])) {
-				args.dump_mode = normalize_dump_mode(atoi(mode_num));
-			}
-			else {
-				print_dmode_param(ERROR_COLOR);
-				info_req = true;
-			}
-			++i;
-		} else if (!strcmp(param, PARAM_DIR) && (i + 1) < argc) {
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_DUMP_MODE,
+			args.dump_mode,
+			pesieve::PE_DUMP_AUTO,
+			info_req,
+			print_dmode_param))
+		{
+			args.dump_mode = normalize_dump_mode(args.dump_mode);
+			continue;
+		}
+		else if (!strcmp(param, PARAM_DIR) && (i + 1) < argc) {
 			set_output_dir(args, argv[i + 1]);
 			++i;
 		} else {
