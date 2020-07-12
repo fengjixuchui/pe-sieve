@@ -50,7 +50,7 @@ bool pesieve::WorkingSetScanner::isPotentiallyExecutable(MemPageData &memPageDat
 		return false;
 	}
 
-	const bool is_managed = (this->processReport) ? this->processReport->isManagedProcess() : false;
+	const bool is_managed = this->processReport.isManagedProcess();
 
 	if (mode == pesieve::PE_DATA_SCAN_NO_DEP 
 		&& memPage.is_dep_enabled && !is_managed)
@@ -100,7 +100,7 @@ WorkingSetScanReport* pesieve::WorkingSetScanner::scanExecutableArea(MemPageData
 	ULONGLONG region_start = memPage.region_start;
 	const size_t region_size = size_t (memPage.region_end - region_start);
 	WorkingSetScanReport *my_report = new WorkingSetScanReport(processHandle, (HMODULE)region_start, region_size, SCAN_SUSPICIOUS);
-	my_report->has_pe = isScannedAsModule(memPage) && this->processReport->hasModule(memPage.region_start);
+	my_report->has_pe = isScannedAsModule(memPage) && this->processReport.hasModule(memPage.region_start);
 	my_report->has_shellcode = true;
 	return my_report;
 }
@@ -110,7 +110,7 @@ bool pesieve::WorkingSetScanner::isScannedAsModule(MemPageData &memPage)
 	if (memPage.mapping_type != MEM_IMAGE) {
 		return false;
 	}
-	if (this->processReport->hasModule((ULONGLONG)memPage.alloc_base)) {
+	if (this->processReport.hasModule((ULONGLONG)memPage.alloc_base)) {
 		return true; // it was already scanned as a PE
 	}
 	return false;
@@ -118,10 +118,7 @@ bool pesieve::WorkingSetScanner::isScannedAsModule(MemPageData &memPage)
 
 bool pesieve::WorkingSetScanner::scanImg()
 {
-	bool show_info = (!args.quiet);
-#ifdef _DEBUG
-	show_info = true;
-#endif
+	const bool show_info = (!args.quiet);
 
 	if (!memPage.loadMappedName()) {
 		//cannot retrieve the mapped name
@@ -157,9 +154,7 @@ bool pesieve::WorkingSetScanner::scanImg()
 #ifdef _DEBUG
 			std::cout << "[*] Skipping a .NET module: " << modData.szModName << std::endl;
 #endif
-			if (processReport) {
-				processReport->appendReport(new SkippedModuleReport(processHandle, modData.moduleHandle, modData.original_size, modData.szModName));
-			}
+			processReport.appendReport(new SkippedModuleReport(processHandle, modData.moduleHandle, modData.original_size, modData.szModName));
 			return true;
 		}
 		if (!args.no_hooks) {
@@ -181,7 +176,7 @@ WorkingSetScanReport* pesieve::WorkingSetScanner::scanRemote()
 		return nullptr;
 	}
 	// is the page executable?
-	bool is_any_exec = isExecutable(memPage);
+	const bool is_any_exec = isExecutable(memPage);
 	if (!is_any_exec) {
 		// probably not interesting
 		return nullptr;
@@ -199,19 +194,15 @@ WorkingSetScanReport* pesieve::WorkingSetScanner::scanRemote()
 			scanImg();
 		}
 		const size_t region_size = (memPage.region_end) ? (memPage.region_end - memPage.region_start) : 0;
-		if (this->processReport->hasModuleContaining(memPage.region_start, region_size)) {
+		if (this->processReport.hasModuleContaining(memPage.region_start, region_size)) {
 			// the area was already scanned
 			return nullptr;
 		}
 	}
-
-	WorkingSetScanReport* my_report = nullptr;
-	if (is_any_exec) {
 #ifdef _DEBUG
-		std::cout << std::hex << memPage.start_va << ": Scanning executable area" << std::endl;
+	std::cout << std::hex << memPage.start_va << ": Scanning executable area" << std::endl;
 #endif
-		my_report = this->scanExecutableArea(memPage);
-	}
+	WorkingSetScanReport* my_report = this->scanExecutableArea(memPage);
 	if (!my_report) {
 		return nullptr;
 	}
