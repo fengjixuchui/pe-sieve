@@ -20,28 +20,13 @@ bool pesieve::WorkingSetScanner::isCode(MemPageData &memPageData)
 
 bool pesieve::WorkingSetScanner::isExecutable(MemPageData &memPageData)
 {
-	bool is_any_exec = false;
-	if (memPage.mapping_type == MEM_IMAGE)
-	{
-		is_any_exec = (memPage.protection & SECTION_MAP_EXECUTE)
-			|| (memPage.protection & SECTION_MAP_EXECUTE_EXPLICIT)
-			|| (memPage.initial_protect & SECTION_MAP_EXECUTE)
-			|| (memPage.initial_protect & SECTION_MAP_EXECUTE_EXPLICIT);
-
-		if (is_any_exec) return true;
+	if (pesieve::util::is_executable(memPage.mapping_type, memPage.protection)) {
+		return true;
 	}
-	is_any_exec = (memPage.initial_protect & PAGE_EXECUTE_READWRITE)
-		|| (memPage.initial_protect & PAGE_EXECUTE_READ)
-		|| (memPage.initial_protect & PAGE_EXECUTE)
-		|| (memPage.initial_protect & PAGE_EXECUTE_WRITECOPY)
-		|| (memPage.protection & PAGE_EXECUTE_READWRITE)
-		|| (memPage.protection & PAGE_EXECUTE_READ)
-		|| (memPage.protection & PAGE_EXECUTE)
-		|| (memPage.protection & PAGE_EXECUTE_WRITECOPY);
-	if (is_any_exec) return true;
-
-	is_any_exec = isPotentiallyExecutable(memPageData, this->args.data);
-	return is_any_exec;
+	if (pesieve::util::is_executable(memPage.mapping_type, memPage.initial_protect)) {
+		return true;
+	}
+	return isPotentiallyExecutable(memPageData, this->args.data);
 }
 
 bool pesieve::WorkingSetScanner::isPotentiallyExecutable(MemPageData &memPageData, const t_data_scan_mode &mode)
@@ -65,7 +50,7 @@ bool pesieve::WorkingSetScanner::isPotentiallyExecutable(MemPageData &memPageDat
 	bool is_any_exec = false;
 
 	if (memPage.mapping_type == MEM_IMAGE) {
-		is_any_exec = (memPage.protection & SECTION_MAP_READ);
+		is_any_exec = (memPage.protection & SECTION_MAP_READ) != 0;
 
 		if (is_any_exec) return true;
 	}

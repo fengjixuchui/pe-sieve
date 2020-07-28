@@ -3,6 +3,7 @@
 #include "../utils/format_util.h"
 #include "../utils/path_converter.h"
 #include "../utils/process_util.h"
+#include "../utils/artefacts_util.h"
 #include "artefact_scanner.h"
 
 #include <psapi.h>
@@ -44,9 +45,7 @@ bool pesieve::ModuleData::_loadOriginal(bool disableFSredir)
 	PVOID old_val;
 	if (disableFSredir) {
 		isRedirDisabled = wow64_disable_fs_redirection(&old_val);
-#ifdef _DEBUG
-		std::cout << "[+] Loadeding file by disabling FS redirection:" << szModName << "\n";
-#endif
+		// try to load with FS redirection disabled
 	}
 	original_module = peconv::load_pe_module(szModName, original_size, false, false);
 	if (isRedirDisabled) {
@@ -145,8 +144,7 @@ std::string pesieve::RemoteModuleData::getMappedName(HANDLE processHandle, LPVOI
 	if (!GetMappedFileNameA(processHandle, modBaseAddr, filename, MAX_PATH) != 0) {
 		return "";
 	}
-	std::string basic_filename = pesieve::util::device_path_to_win32_path(filename);
-	std::string expanded = pesieve::util::expand_path(basic_filename);
+	std::string expanded = pesieve::util::expand_path(filename);
 	if (expanded.length() == 0) {
 		return filename;
 	}
@@ -210,7 +208,26 @@ ULONGLONG pesieve::RemoteModuleData::getRemoteSectionVa(const size_t section_num
 	return (ULONGLONG) modBaseAddr + section_hdr->VirtualAddress;
 }
 
-bool pesieve::RemoteModuleData::isSectionExecutable(size_t section_number)
+bool pesieve::RemoteModuleData::isSectionEntry(const size_t section_number)
+{
+	if (!this->isInitialized()) {
+		return false;
+	}
+	const DWORD ep_va = peconv::get_entry_point_rva(this->headerBuffer);
+	if (ep_va == 0) {
+		return false;
+	}
+	PIMAGE_SECTION_HEADER sec_hdr = peconv::get_section_hdr(this->headerBuffer, peconv::MAX_HEADER_SIZE, section_number);
+	if (!sec_hdr) {
+		return false;
+	}
+	if (ep_va >= sec_hdr->VirtualAddress && ep_va < sec_hdr->Misc.VirtualSize) {
+		return true;
+	}
+	return false;
+}
+
+bool pesieve::RemoteModuleData::isSectionExecutable(const size_t section_number)
 {
 	//for special cases when the section is not set executable in headers, but in reality is executable...
 	//get the section header from the module:
@@ -230,27 +247,12 @@ bool pesieve::RemoteModuleData::isSectionExecutable(size_t section_number)
 #ifdef _DEBUG
 	std::cout << std::hex << "Sec: " << section_number << " VA: " << start_va << " t: " << page_info.Type << " p: " << page_info.Protect << std::endl;
 #endif
-	DWORD protection = page_info.Protect;
-	DWORD initial_protect = page_info.AllocationProtect;
 
-	bool is_any_exec = false;
-	if (page_info.Type == MEM_IMAGE) {
-		is_any_exec = (protection & SECTION_MAP_EXECUTE)
-			|| (protection & SECTION_MAP_EXECUTE_EXPLICIT);
-		if (is_any_exec) {
-			return true;
-		}
-		return false;
+	if (pesieve::util::is_executable(page_info.Type, page_info.Protect)) {
+		//std::cout << std::hex << "p1 Sec: " << section_number << " VA: " << start_va << " t: " << page_info.Type << " p: " << page_info.Protect << std::endl;
+		return true;
 	}
-	is_any_exec = (initial_protect & PAGE_EXECUTE_READWRITE)
-		|| (initial_protect & PAGE_EXECUTE_READ)
-		|| (initial_protect & PAGE_EXECUTE)
-		|| (initial_protect & PAGE_EXECUTE_WRITECOPY)
-		|| (protection & PAGE_EXECUTE_READWRITE)
-		|| (protection & PAGE_EXECUTE_READ)
-		|| (protection & PAGE_EXECUTE)
-		|| (protection & PAGE_EXECUTE_WRITECOPY);
-	return is_any_exec;
+	return false;
 }
 
 bool pesieve::RemoteModuleData::hasExecutableSection()

@@ -58,8 +58,10 @@ namespace pesieve {
 				this->errorsCount++;
 			}
 			appendToType(report);
-			//add to the list of scanned modules:
-			appendToModulesList(report);
+			// if the scan was successful, append the module to the scanned modules:
+			if (ModuleScanReport::get_scan_status(report) != SCAN_ERROR) {
+				appendToModulesList(report);
+			}
 		}
 
 		size_t getScannedSize(ULONGLONG address) const
@@ -105,11 +107,16 @@ namespace pesieve {
 			}
 			moduleReports.clear();
 		}
-
+	
 		void appendToType(ModuleScanReport *report);
-		size_t countSuspiciousPerType(t_report_type type) const;
-		size_t countHdrsReplaced() const;
+		size_t countResultsPerType(const t_report_type type, const t_scan_status result) const;
 
+		size_t countSuspiciousPerType(const t_report_type type) const
+		{
+			return countResultsPerType(type, SCAN_SUSPICIOUS);
+		}
+
+		size_t countHdrsReplaced() const;
 		bool appendToModulesList(ModuleScanReport *report);
 		bool hasAnyShownType(const ProcessScanReport::t_report_filter &filter);
 

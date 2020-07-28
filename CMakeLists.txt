@@ -235,14 +235,17 @@ if(PESIEVE_AS_STATIC_LIB OR PESIEVE_AS_DLL)
 	)
 endif()
 
-install(TARGETS ${PROJECT_NAME}
-	RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX} COMPONENT ${PROJECT_NAME}
-)
+if (NOT PESIEVE_AS_STATIC_LIB)
+	install(TARGETS ${PROJECT_NAME}
+		DESTINATION ${CMAKE_INSTALL_PREFIX} COMPONENT ${PROJECT_NAME}
+	)
+endif()
+
 
 
 # libs
 add_subdirectory (libpeconv/libpeconv)
-set ( PECONV_LIB $<TARGET_FILE:libpeconv> CACHE FILE "PEConvLib library path" )
+set ( PECONV_LIB $<TARGET_FILE:libpeconv> CACHE PATH "PEConvLib library path" )
 
 target_link_libraries ( ${PROJECT_NAME} ${PECONV_LIB} "psapi.lib" "ntdll.lib" "shlwapi")
 

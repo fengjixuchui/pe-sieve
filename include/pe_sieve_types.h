@@ -47,10 +47,11 @@ namespace pesieve {
 	} t_iat_scan_mode;
 
 	typedef enum {
-		PE_DNET_AUTO = 0,// treat .NET modules the same as native modules
-		PE_DNET_SKIP_SHC = 1, // skip shellcodes in .NET modules
-		PE_DNET_SKIP_HOOKS = 2, // skip hooks in .NET modules
-		PE_DNET_SKIP_SHC_AND_HOOKS = 3,
+		PE_DNET_NONE = 0,// none: treat managed processes same as native
+		PE_DNET_SKIP_MAPPING = 1, // skip mapping mismatch (in .NET modules only)
+		PE_DNET_SKIP_SHC, // skip shellcodes (in all modules within the managed process)
+		PE_DNET_SKIP_HOOKS, // skip hooked modules (in all modules within the managed process)
+		PE_DNET_SKIP_ALL,
 		PE_DNET_COUNT
 	} t_dotnet_policy;
 
@@ -89,12 +90,13 @@ namespace pesieve {
 		DWORD suspicious;// general summary of suspicious
 		DWORD replaced; // PE file replaced in memory (probably hollowed)
 		DWORD hdr_mod; // PE header is modified (but not replaced)
-		DWORD detached; // cannot find the file corresponding to the module in memory
+		DWORD unreachable_file; // cannot read the file corresponding to the module in memory
 		DWORD patched; // detected modifications in the code
 		DWORD iat_hooked; // detected IAT hooks
 		DWORD implanted; // all implants: shellcodes + PEs
 		DWORD implanted_pe; // the full PE was probably loaded manually
 		DWORD implanted_shc; //implanted shellcodes
+		DWORD other; // other indicators
 		DWORD skipped; // some of the modules must be skipped (i.e. dotNET managed code have different characteristics and this scan does not apply)
 		DWORD errors; // Count of elements that could not be scanned because of errors. If errors == ERROR_SCAN_FAILURE, no scan was performed.
 	} t_report;

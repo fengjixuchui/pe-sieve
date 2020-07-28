@@ -106,20 +106,20 @@ pesieve::ProcessScanReport::t_report_type pesieve::ProcessScanReport::getReportT
 	return pesieve::ProcessScanReport::REPORT_TYPES_COUNT;
 }
 
-size_t pesieve::ProcessScanReport::countSuspiciousPerType(t_report_type type) const
+size_t pesieve::ProcessScanReport::countResultsPerType(const t_report_type type, const t_scan_status result) const
 {
 	if (type >= REPORT_TYPES_COUNT) {
 		return 0; //invalid type
 	}
-	size_t suspicious = 0;
+	size_t counter = 0;
 	std::set<ModuleScanReport*>::iterator itr;
 	for (itr = this->reportsByType[type].begin(); itr != this->reportsByType[type].end(); ++itr) {
 		ModuleScanReport* report = *itr;
-		if (ModuleScanReport::get_scan_status(report) == SCAN_SUSPICIOUS) {
-			suspicious++;
+		if (ModuleScanReport::get_scan_status(report) == result) {
+			counter++;
 		}
 	}
-	return suspicious;
+	return counter;
 }
 
 void pesieve::ProcessScanReport::appendToType(ModuleScanReport *report)
@@ -137,7 +137,7 @@ void pesieve::ProcessScanReport::appendToType(ModuleScanReport *report)
 size_t pesieve::ProcessScanReport::countHdrsReplaced() const
 {
 	size_t replaced = 0;
-	const t_report_type type = t_report_type::REPORT_HEADERS_SCAN;
+	const t_report_type type = REPORT_HEADERS_SCAN;
 
 	std::set<ModuleScanReport*>::iterator itr;
 	for (itr = this->reportsByType[type].begin(); itr != this->reportsByType[type].end(); ++itr) {
@@ -181,8 +181,8 @@ pesieve::t_report pesieve::ProcessScanReport::generateSummary() const
 	summary.implanted_pe = countSuspiciousPerType(REPORT_ARTEFACT_SCAN);
 	summary.implanted = summary.implanted_shc + summary.implanted_pe;
 	summary.hdr_mod = countSuspiciousPerType(REPORT_HEADERS_SCAN) - summary.replaced;
-	summary.detached = countSuspiciousPerType(REPORT_UNREACHABLE_SCAN);
-	
+	summary.unreachable_file = countSuspiciousPerType(REPORT_UNREACHABLE_SCAN) + countResultsPerType(REPORT_UNREACHABLE_SCAN, pesieve::SCAN_ERROR);
+	summary.other = summary.suspicious - (summary.patched + summary.replaced + summary.implanted + summary.hdr_mod + summary.iat_hooked);
 	return summary;
 }
 
@@ -217,7 +217,7 @@ const bool pesieve::ProcessScanReport::toJSON(std::stringstream &stream, size_t 
 {
 	const t_report report = this->generateSummary();
 	//summary:
-	size_t other = report.suspicious - (report.patched + report.replaced + report.detached + report.implanted + report.hdr_mod);
+	size_t other = report.other;
 	stream << "{\n";
 	OUT_PADDED(stream, level, "\"pid\" : ");
 	stream << std::dec << report.pid << ",\n";
@@ -247,12 +247,12 @@ const bool pesieve::ProcessScanReport::toJSON(std::stringstream &stream, size_t 
 	stream << std::dec << report.replaced << ",\n";
 	OUT_PADDED(stream, level + 2, "\"hdr_modified\" : ");
 	stream << std::dec << report.hdr_mod << ",\n";
-	OUT_PADDED(stream, level + 2, "\"detached\" : ");
-	stream << std::dec << report.detached << ",\n";
 	OUT_PADDED(stream, level + 2, "\"implanted_pe\" : ");
 	stream << std::dec << report.implanted_pe << ",\n";
 	OUT_PADDED(stream, level + 2, "\"implanted_shc\" : ");
 	stream << std::dec << report.implanted_shc << ",\n";
+	OUT_PADDED(stream, level + 2, "\"unreachable_file\" : ");
+	stream << std::dec << report.unreachable_file << ",\n";
 	OUT_PADDED(stream, level + 2, "\"other\" : ");
 	stream << std::dec << other << "\n";
 	OUT_PADDED(stream, level + 1, "},\n"); // modified
