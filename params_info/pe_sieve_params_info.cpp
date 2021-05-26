@@ -95,6 +95,19 @@ std::string pesieve::translate_data_mode(const pesieve::t_data_scan_mode &mode)
 	return "undefined";
 }
 
+std::string pesieve::translate_json_level(const pesieve::t_json_level &mode)
+{
+	switch (mode) {
+	case pesieve::JSON_BASIC:
+		return "basic";
+	case pesieve::JSON_DETAILS:
+		return "details #1 (list patches)";
+	case pesieve::JSON_DETAILS2:
+		return "details #2 (list patches: extended)";
+	}
+	return "undefined";
+}
+
 std::string pesieve::translate_iat_scan_mode(const pesieve::t_iat_scan_mode mode)
 {
 	switch (mode) {
@@ -124,3 +137,10 @@ pesieve::t_dump_mode pesieve::normalize_dump_mode(size_t mode_id)
 	return (pesieve::t_dump_mode) mode_id;
 }
 
+pesieve::t_json_level pesieve::normalize_json_level(size_t mode_id)
+{
+	if (mode_id > pesieve::JSON_LVL_COUNT) {
+		return pesieve::JSON_DETAILS;
+	}
+	return (pesieve::t_json_level) mode_id;
+}

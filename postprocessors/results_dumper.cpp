@@ -10,6 +10,7 @@
 #include "pe_reconstructor.h"
 #include "imp_rec/imp_reconstructor.h"
 #include "../scanners/iat_scanner.h"
+#include "../scanners/code_scanner.h"
 
 #define DIR_SEPARATOR "\\"
 
@@ -108,7 +109,7 @@ namespace pesieve {
 }; //namespace pesieve
 
 
-bool pesieve::ResultsDumper::dumpJsonReport(pesieve::ProcessScanReport &process_report, const ProcessScanReport::t_report_filter &filter)
+bool pesieve::ResultsDumper::dumpJsonReport(pesieve::ProcessScanReport &process_report, const ProcessScanReport::t_report_filter &filter, const pesieve::t_json_level &jdetails)
 {
 	std::stringstream stream;
 	size_t level = 1;
@@ -116,7 +117,7 @@ bool pesieve::ResultsDumper::dumpJsonReport(pesieve::ProcessScanReport &process_
 	if (!process_report.hasAnyShownType(filter)) {
 		return false;
 	}
-	if (!process_report.toJSON(stream, level, filter)) {
+	if (!process_report.toJSON(stream, level, filter, jdetails)) {
 		return false;
 	}
 	std::string report_all = stream.str();
@@ -323,10 +324,14 @@ bool pesieve::ResultsDumper::dumpModule(IN HANDLE processHandle,
 		is_dumped = false;
 	}
 
-	std::string tags_file = modDumpReport->dumpFileName + ".tag";
-	if (mod->generateTags(tags_file)) {
-		modDumpReport->tagsFileName = tags_file;
-		modDumpReport->isReportDumped = true;
+	pesieve::CodeScanReport *codeScanReport = dynamic_cast<pesieve::CodeScanReport*>(mod);
+	if (codeScanReport) {
+		std::string tags_file = modDumpReport->dumpFileName + ".tag";
+
+		if (codeScanReport->generateTags(tags_file)) {
+			modDumpReport->tagsFileName = tags_file;
+			modDumpReport->isReportDumped = true;
+		}
 	}
 
 	IATScanReport* iatHooksReport = dynamic_cast<IATScanReport*>(mod);

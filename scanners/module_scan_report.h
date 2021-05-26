@@ -54,7 +54,7 @@ namespace pesieve {
 
 		virtual ~ModuleScanReport() {}
 
-		const virtual bool toJSON(std::stringstream &outs, size_t level = JSON_LEVEL)
+		const virtual bool toJSON(std::stringstream &outs, size_t level = JSON_LEVEL, const pesieve::t_json_level &jdetails = JSON_BASIC)
 		{
 			OUT_PADDED(outs, level, "\"module\" : ");
 			outs << "\"" << std::hex << (ULONGLONG) module << "\"" << ",\n";
@@ -71,8 +71,6 @@ namespace pesieve {
 			}
 			return true;
 		}
-
-		virtual size_t generateTags(std::string reportPath) { return 0; }
 
 		virtual ULONGLONG getRelocBase()
 		{

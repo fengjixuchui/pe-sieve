@@ -33,6 +33,7 @@
 #define PARAM_OUT_FILTER "ofilter"
 #define PARAM_QUIET "quiet"
 #define PARAM_JSON "json"
+#define PARAM_JSON_LVL "jlvl"
 #define PARAM_DIR "dir"
 #define PARAM_MINIDUMP "minidmp"
 //info:
@@ -60,6 +61,51 @@ bool is_param(const char *str)
 		return true;
 	}
 	return false;
+}
+
+size_t print_params_block(std::string block_name, std::map<std::string, void(*)(int)> params_block, const std::string &filter)
+{
+	const int hdr_color = HEADER_COLOR;
+	const int param_color = HILIGHTED_COLOR;
+	const int separator_color = SEPARATOR_COLOR;
+
+	const bool has_filter = filter.length() > 0 ? true : false;
+	bool has_any = false;
+
+	std::map<std::string, void(*)(int)>::iterator itr;
+	for (itr = params_block.begin(); itr != params_block.end();itr++) {
+		const std::string &param = itr->first;
+		if (has_filter) {
+			stringsim_type sim_type = is_string_similar(param, filter);
+			if (sim_type != SIM_NONE) has_any = true;
+		}
+		else {
+			has_any = true;
+		}
+	}
+	if (!has_any) return 0;
+
+	int p_color = param_color;
+	if (block_name.length()) {
+		print_in_color(separator_color, "\n---" + block_name + "---\n");
+	}
+	size_t counter = 0;
+	for (itr = params_block.begin(); itr != params_block.end();itr++) {
+		const std::string &param = itr->first;
+		if (filter.length() > 0) {
+			const stringsim_type sim_type = is_string_similar(param, filter);
+			p_color = (sim_type != SIM_NONE) ? ERROR_COLOR : param_color;
+			if (sim_type == SIM_NONE) continue;
+		}
+		void(*info)(int) = itr->second;
+		if (!info) continue;
+		info(p_color);
+		counter++;
+	}
+	if (has_filter) {
+		print_in_color(INACTIVE_COLOR, "\n[...]\n");
+	}
+	return counter;
 }
 
 size_t copyToCStr(char *buf, size_t buf_max, const std::string &value)
@@ -229,6 +275,16 @@ void print_json_param(int param_color)
 	std::cout << "\t: Print the JSON report as the summary.\n";
 }
 
+void print_json_level_param(int param_color)
+{
+	print_param_in_color(param_color, PARAM_JSON_LVL);
+	std::cout << " <*json_lvl>\n\t: Level of details of the JSON report.\n";
+	std::cout << "*json_lvl:\n";
+	for (DWORD i = 0; i < pesieve::JSON_LVL_COUNT; i++) {
+		std::cout << "\t" << i << " - " << translate_json_level((pesieve::t_json_level) i) << "\n";
+	}
+}
+
 void print_quiet_param(int param_color)
 {
 	print_param_in_color(param_color, PARAM_QUIET);
@@ -247,46 +303,62 @@ void print_output_dir_param(int param_color)
 	std::cout << " <output_dir>\n\t: Set a root directory for the output (default: current directory).\n";
 }
 
-void print_help()
+void print_help(std::string filter = "")
 {
 	const int hdr_color = HEADER_COLOR;
 	const int param_color = HILIGHTED_COLOR;
 	const int separator_color = SEPARATOR_COLOR;
 
 	print_in_color(hdr_color, "Required: \n");
-	print_pid_param(param_color);
+	std::map<std::string, void(*)(int)> required_params;
+	required_params[PARAM_PID] = print_pid_param;
+	if (!print_params_block("", required_params, filter)) {
+		print_in_color(INACTIVE_COLOR, "\n[...]\n");
+	}
 
 	print_in_color(hdr_color, "\nOptional: \n");
+	size_t cntr = 0;
+	std::map<std::string, void(*)(int)> scan_params;
+	std::map<std::string, void(*)(int)> scan_exclusions;
+	std::map<std::string, void(*)(int)> scanner_params;
 
-	print_in_color(separator_color, "\n---scan options---\n");
-	print_iat_param(param_color);
-	print_shellc_param(param_color);
+	scan_params[PARAM_IAT] = print_iat_param;
+	scan_params[PARAM_SHELLCODE] = print_shellc_param;
+	scan_params[PARAM_DATA] = print_data_param;
 
-	print_data_param(param_color);
 #ifdef _WIN64
-	print_module_filter_param(param_color);
+	scan_exclusions[PARAM_MODULES_FILTER] = print_module_filter_param;
 #endif
-	print_mignore_param(param_color);
-	print_refl_param(param_color);
-	print_dnet_param(param_color);
 
-	print_in_color(separator_color, "\n---dump options---\n");
-	print_imprec_param(param_color);
-	print_dmode_param(param_color);
+	scan_exclusions[PARAM_MODULES_IGNORE] = print_mignore_param;
+	scan_exclusions[PARAM_DOTNET_POLICY] = print_dnet_param;
 
-	print_in_color(separator_color, "\n---output options---\n");
+	scanner_params[PARAM_REFLECTION] = print_refl_param;
+	scanner_params[PARAM_QUIET] = print_quiet_param;
 
-	print_out_filter_param(param_color);
+	cntr += print_params_block("scanner settings", scanner_params, filter);
+	cntr += print_params_block("scan exclusions", scan_exclusions, filter);
+	cntr += print_params_block("scan options", scan_params, filter);
 
-	print_quiet_param(param_color);
-	print_json_param(param_color);
+	std::map<std::string, void(*)(int)> dump_params;
+	dump_params[PARAM_IMP_REC] = print_imprec_param;
+	dump_params[PARAM_DUMP_MODE] = print_dmode_param;
+	dump_params[PARAM_MINIDUMP] = print_minidump_param;
+	cntr += print_params_block("dump options", dump_params, filter);
 
-	print_minidump_param(param_color);
-	print_output_dir_param(param_color);
+	std::map<std::string, void(*)(int)> out_params;
+	out_params[PARAM_OUT_FILTER] = print_out_filter_param;
+	out_params[PARAM_DIR] = print_output_dir_param;
+	out_params[PARAM_JSON] = print_json_param;
+	out_params[PARAM_JSON_LVL] = print_json_level_param;
+	cntr += print_params_block("output options", out_params, filter);
+	if (cntr == 0) {
+		print_in_color(INACTIVE_COLOR, "\n[...]\n");
+	}
 
 	print_in_color(hdr_color, "\nInfo: \n");
 	print_param_in_color(param_color, PARAM_HELP);
-	std::cout << "    : Print this help.\n";
+	std::cout << "    : Print help.\n";
 	print_param_in_color(param_color, PARAM_VERSION);
 	std::cout << " : Print version number.\n";
 	std::cout << "---" << std::endl;
@@ -315,13 +387,15 @@ ________________________________________________________________________\n";
 	print_help();
 }
 
-void print_scan_report(const ProcessScanReport& report, const t_params args)
+void print_report(const pesieve::ReportEx& report, const t_params args)
 {
+	if (!report.scan_report) return;
+
 	std::string report_str;
 	if (args.json_output) {
-		report_str = scan_report_to_json(report, ProcessScanReport::REPORT_SUSPICIOUS_AND_ERRORS);
+		report_str = scan_report_to_json(*report.scan_report, ProcessScanReport::REPORT_SUSPICIOUS_AND_ERRORS, args.json_lvl);
 	} else {
-		report_str = scan_report_to_string(report);
+		report_str = scan_report_to_string(*report.scan_report);
 	}
 	//summary:
 	std::cout << report_str;
@@ -360,7 +434,11 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		const char *param = &argv[i][1];
-		if (!strcmp(param, PARAM_HELP) || !strcmp(param, PARAM_HELP2)) {
+		if (!strcmp(param, PARAM_HELP2)) {
+			banner();
+			return 0;
+		}
+		if (!strcmp(param, PARAM_HELP)) {
 			print_help();
 			info_req = true;
 		}
@@ -429,6 +507,16 @@ int main(int argc, char *argv[])
 			info_req,
 			print_json_param))
 		{
+			continue;
+		}
+		else if (get_int_param(argc, argv, param, i,
+			PARAM_JSON_LVL,
+			args.json_lvl,
+			JSON_BASIC,
+			info_req,
+			print_json_level_param))
+		{
+			args.json_lvl = normalize_json_level(args.json_lvl);
 			continue;
 		}
 		else if (get_int_param(argc, argv, param, i,
@@ -506,8 +594,8 @@ int main(int argc, char *argv[])
 		}
 		else {
 			print_unknown_param(argv[i]);
-			print_in_color(HILIGHTED_COLOR, "Available parameters:\n\n");
-			print_help();
+			print_in_color(HILIGHTED_COLOR, "Similar parameters:\n\n");
+			print_help(param);
 			return 0;
 		}
 	}
@@ -522,7 +610,7 @@ int main(int argc, char *argv[])
 	if (args.pid == 0) {
 		if (argc >= 2 && is_number(argv[1])) args.pid = get_number(argv[1]);
 		if (args.pid == 0) {
-			print_help();
+			print_help(PARAM_PID);
 			return 0;
 		}
 	}
@@ -535,7 +623,7 @@ int main(int argc, char *argv[])
 	}
 	pesieve::ReportEx* report = pesieve::scan_and_dump(args);
 	if (report != nullptr) {
-		print_scan_report(*report->scan_report, args);
+		print_report(*report, args);
 		delete report;
 		report = nullptr;
 	}

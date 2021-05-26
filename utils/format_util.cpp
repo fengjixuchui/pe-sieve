@@ -32,7 +32,6 @@ namespace pesieve {
 	};
 };
 
-
 long pesieve::util::get_number(const char *my_buf)
 {
 	const char hex_pattern[] = "0x";
@@ -42,18 +41,22 @@ long pesieve::util::get_number(const char *my_buf)
 	if (len == 0) return 0;
 
 	long out = 0;
-	const size_t min_length = 1; //tolerate number with at least 1 character is fine
+	const size_t min_length = 1; //tolerate number with at least 1 character
 	if (len > hex_pattern_len) {
-		if (strncmp(my_buf, hex_pattern, hex_pattern_len) == 0) {
+		if (is_cstr_equal(my_buf, hex_pattern, hex_pattern_len)) {
 			if (!is_hex(my_buf + hex_pattern_len, min_length)) return 0;
 
-			out = std::stoul(my_buf, nullptr, 16);
+			std::stringstream ss;
+			ss << std::hex << my_buf;
+			ss >> out;
 			return out;
 		}
 	}
 	if (!is_dec(my_buf, min_length)) return 0;
 
-	out = std::stoul(my_buf, nullptr, 10);
+	std::stringstream ss;
+	ss << std::dec << my_buf;
+	ss >> out;
 	return out;
 }
 
@@ -66,7 +69,7 @@ bool pesieve::util::is_number(const char* my_buf)
 	if (len == 0) return false;
 
 	if (len > hex_pattern_len) {
-		if (strncmp(my_buf, hex_pattern, hex_pattern_len) == 0) {
+		if (is_cstr_equal(my_buf, hex_pattern, hex_pattern_len)) {
 			if (!is_hex(my_buf + hex_pattern_len, len - hex_pattern_len)) return false;
 
 			return true;
@@ -74,12 +77,6 @@ bool pesieve::util::is_number(const char* my_buf)
 	}
 	if (!is_dec(my_buf, len)) return false;
 	return true;
-}
-
-std::string pesieve::util::to_lowercase(std::string str)
-{
-	std::transform(str.begin(), str.end(), str.begin(), tolower);
-	return str;
 }
 
 bool pesieve::util::is_in_list(const char *searched_str, const char *str_list)
@@ -138,3 +135,4 @@ size_t pesieve::util::delim_list_to_multi_sz(IN const char *delim_list_str, IN c
 	}
 	return str_count;
 }
+

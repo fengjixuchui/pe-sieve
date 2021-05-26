@@ -24,14 +24,19 @@ namespace pesieve {
 			moduleFile = _moduleFile;
 		}
 
-		const virtual bool toJSON(std::stringstream &outs, size_t level = JSON_LEVEL)
+		const virtual bool toJSON(std::stringstream &outs, size_t level, const pesieve::t_json_level &jdetails)
 		{
+			size_t hooks = countHooked();
 			OUT_PADDED(outs, level, "\"iat_scan\" : ");
 			outs << "{\n";
 			ModuleScanReport::toJSON(outs, level + 1);
 			outs << ",\n";
 			OUT_PADDED(outs, level + 1, "\"hooks\" : ");
-			outs << std::dec << countHooked();
+			outs << std::dec << hooks;
+			if (jdetails >= JSON_DETAILS && hooks) {
+				outs << ",\n";
+				this->hooksToJSON(outs, level + 1);
+			}
 			outs << "\n";
 			OUT_PADDED(outs, level, "}");
 			return true;
@@ -39,6 +44,7 @@ namespace pesieve {
 
 		bool generateList(IN const std::string &fileName, IN HANDLE hProcess, IN const ProcessModules &modulesInfo, IN const peconv::ExportsMapper *exportsMap);
 
+		const bool hooksToJSON(std::stringstream &outs, size_t level);
 		size_t countHooked() { return notCovered.count(); }
 
 		std::map<ULONGLONG, peconv::ExportedFunc> storedFunc;

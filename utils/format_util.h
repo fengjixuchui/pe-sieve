@@ -4,6 +4,8 @@
 #include <sstream>
 #include <iomanip>
 
+#include "strings_util.h"
+
 #define OUT_PADDED(stream, field_size, str) \
 std::cout.fill(' '); \
 if (field_size) stream << std::setw(field_size) << ' '; \
@@ -22,8 +24,6 @@ namespace pesieve {
 		Checks if the buffer is a number (hexadecimal or decimal ). Hexadecimal numbers should be prefixed with "0x".
 		*/
 		bool is_number(const char* buf);
-
-		std::string to_lowercase(std::string);
 
 		// Checks if the given cstring is in the multi-SZ list
 		bool is_in_list(const char *searched_string, const char *strings_list);

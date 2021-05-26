@@ -25,14 +25,9 @@ namespace pesieve {
 		{
 		}
 
-		const virtual void fieldsToJSON(std::stringstream &outs, size_t level = JSON_LEVEL)
+		const virtual void fieldsToJSON(std::stringstream &outs, size_t level, const pesieve::t_json_level &jdetails)
 		{
 			ModuleScanReport::toJSON(outs, level);
-			if (patchesList.size() > 0) {
-				outs << ",\n";
-				OUT_PADDED(outs, level, "\"patches\" : ");
-				outs << std::dec << patchesList.size();
-			}
 			if (sectionToResult.size() > 0) {
 				outs << ",\n";
 				OUT_PADDED(outs, level, "\"scanned_sections\" : ");
@@ -44,12 +39,23 @@ namespace pesieve {
 				OUT_PADDED(outs, level, "\"unpacked_sections\" : ");
 				outs << std::dec << unpacked;
 			}
+			if (patchesList.size() > 0) {
+				outs << ",\n";
+				OUT_PADDED(outs, level, "\"patches\" : ");
+				outs << std::dec << patchesList.size();
+
+				if (jdetails >= JSON_DETAILS) {
+					outs << ",\n";
+					const bool is_short = (jdetails < JSON_DETAILS2) ? true : false;
+					patchesList.toJSON(outs, level, is_short);
+				}
+			}
 		}
 
-		const virtual bool toJSON(std::stringstream &outs, size_t level = JSON_LEVEL)
+		const virtual bool toJSON(std::stringstream &outs, size_t level, const pesieve::t_json_level &jdetails)
 		{
 			OUT_PADDED(outs, level, "\"code_scan\" : {\n");
-			fieldsToJSON(outs, level + 1);
+			fieldsToJSON(outs, level + 1, jdetails);
 			outs << "\n";
 			OUT_PADDED(outs, level, "}");
 			return true;

@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 3.12.4)
 project (pe-sieve)
 
+option(PESIEVE_BUILD_TESTING "Enable testing for PE-sieve" OFF)
 option(PESIEVE_AS_DLL "Build PE-sieve as a DLL" OFF)
 option(PESIEVE_AS_STATIC_LIB "Build PE-Sieve as a static library" OFF)
 
@@ -117,6 +118,7 @@ set (utils_srcs
 	utils/artefacts_util.cpp
 	utils/process_reflection.cpp
 	utils/console_color.cpp
+	utils/strings_util.cpp
 )
 
 set (utils_hdrs
@@ -131,6 +133,7 @@ set (utils_hdrs
 	utils/artefacts_util.h
 	utils/process_reflection.h
 	utils/console_color.h
+	utils/strings_util.h
 )
 
 set (params_info_hdrs
@@ -239,9 +242,16 @@ if (NOT PESIEVE_AS_STATIC_LIB)
 	install(TARGETS ${PROJECT_NAME}
 		DESTINATION ${CMAKE_INSTALL_PREFIX} COMPONENT ${PROJECT_NAME}
 	)
+
+	# Setup testing
+	if(PESIEVE_BUILD_TESTING)
+		enable_testing()
+	
+		# 0) does the application run
+		add_test (TestRuns ${CMAKE_INSTALL_PREFIX}/pe-sieve -?)
+		set_tests_properties(TestRuns PROPERTIES PASS_REGULAR_EXPRESSION "Version:")
+	endif()
 endif()
-
-
 
 # libs
 add_subdirectory (libpeconv/libpeconv)
