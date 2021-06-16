@@ -21,7 +21,6 @@
 #define PARAM_SHELLCODE "shellc"
 #define PARAM_DATA "data"
 #define PARAM_IAT "iat"
-#define PARAM_MODULES_FILTER "mfilter"
 #define PARAM_MODULES_IGNORE "mignore"
 #define PARAM_REFLECTION "refl"
 #define PARAM_DOTNET_POLICY "dnet"
@@ -73,7 +72,7 @@ size_t print_params_block(std::string block_name, std::map<std::string, void(*)(
 	bool has_any = false;
 
 	std::map<std::string, void(*)(int)>::iterator itr;
-	for (itr = params_block.begin(); itr != params_block.end();itr++) {
+	for (itr = params_block.begin(); itr != params_block.end(); ++itr) {
 		const std::string &param = itr->first;
 		if (has_filter) {
 			stringsim_type sim_type = is_string_similar(param, filter);
@@ -90,7 +89,7 @@ size_t print_params_block(std::string block_name, std::map<std::string, void(*)(
 		print_in_color(separator_color, "\n---" + block_name + "---\n");
 	}
 	size_t counter = 0;
-	for (itr = params_block.begin(); itr != params_block.end();itr++) {
+	for (itr = params_block.begin(); itr != params_block.end(); ++itr) {
 		const std::string &param = itr->first;
 		if (filter.length() > 0) {
 			const stringsim_type sim_type = is_string_similar(param, filter);
@@ -228,16 +227,6 @@ void print_shellc_param(int param_color)
 	std::cout << "\t: Detect shellcode implants. (By default it detects PE only).\n";
 }
 
-void print_module_filter_param(int param_color)
-{
-	print_param_in_color(param_color, PARAM_MODULES_FILTER);
-	std::cout << " <*mfilter_id>\n\t: Filter the scanned modules.\n";
-	std::cout << "*mfilter_id:\n";
-	for (DWORD i = 0; i <= LIST_MODULES_ALL; i++) {
-		std::cout << "\t" << i << " - " << translate_modules_filter(i) << "\n";
-	}
-}
-
 void print_mignore_param(int param_color)
 {
 	print_param_in_color(param_color, PARAM_MODULES_IGNORE);
@@ -303,11 +292,10 @@ void print_output_dir_param(int param_color)
 	std::cout << " <output_dir>\n\t: Set a root directory for the output (default: current directory).\n";
 }
 
-void print_help(std::string filter = "")
+void print_help(const std::string &filter = "")
 {
 	const int hdr_color = HEADER_COLOR;
 	const int param_color = HILIGHTED_COLOR;
-	const int separator_color = SEPARATOR_COLOR;
 
 	print_in_color(hdr_color, "Required: \n");
 	std::map<std::string, void(*)(int)> required_params;
@@ -325,10 +313,6 @@ void print_help(std::string filter = "")
 	scan_params[PARAM_IAT] = print_iat_param;
 	scan_params[PARAM_SHELLCODE] = print_shellc_param;
 	scan_params[PARAM_DATA] = print_data_param;
-
-#ifdef _WIN64
-	scan_exclusions[PARAM_MODULES_FILTER] = print_module_filter_param;
-#endif
 
 	scan_exclusions[PARAM_MODULES_IGNORE] = print_mignore_param;
 	scan_exclusions[PARAM_DOTNET_POLICY] = print_dnet_param;
@@ -415,12 +399,11 @@ int main(int argc, char *argv[])
 	if (argc < 2) {
 		banner();
 		system("pause");
-		return 0;
+		return PESIEVE_INFO;
 	}
 	//---
 	bool info_req = false;
 	t_params args = { 0 };
-	args.modules_filter = LIST_MODULES_ALL;
 
 	//Parse parameters
 	for (int i = 1; i < argc; i++) {
@@ -466,15 +449,6 @@ int main(int argc, char *argv[])
 			pesieve::OUT_FULL,
 			info_req,
 			print_out_filter_param))
-		{
-			continue;
-		}
-		else if (get_int_param<DWORD>(argc, argv, param, i,
-			PARAM_MODULES_FILTER,
-			args.modules_filter,
-			LIST_MODULES_ALL,
-			info_req,
-			print_module_filter_param))
 		{
 			continue;
 		}
@@ -596,7 +570,7 @@ int main(int argc, char *argv[])
 			print_unknown_param(argv[i]);
 			print_in_color(HILIGHTED_COLOR, "Similar parameters:\n\n");
 			print_help(param);
-			return 0;
+			return PESIEVE_INFO;
 		}
 	}
 	// do not start scan if the info was requested:
@@ -611,24 +585,29 @@ int main(int argc, char *argv[])
 		if (argc >= 2 && is_number(argv[1])) args.pid = get_number(argv[1]);
 		if (args.pid == 0) {
 			print_help(PARAM_PID);
-			return 0;
+			return PESIEVE_INFO;
 		}
 	}
 	//---
 	if (!args.quiet) {
 		std::cout << "PID: " << args.pid << std::endl;
-		std::cout << "Modules filter: " << translate_modules_filter(args.modules_filter) << std::endl;
 		std::cout << "Output filter: " << translate_out_filter(args.out_filter) << std::endl;
 		std::cout << "Dump mode: " << translate_dump_mode(args.dump_mode) << std::endl;
 	}
 	pesieve::ReportEx* report = pesieve::scan_and_dump(args);
+	t_pesieve_res res = PESIEVE_ERROR;
 	if (report != nullptr) {
 		print_report(*report, args);
+
+		pesieve::t_report summary = report->scan_report->generateSummary();
+		if (summary.scanned > 0) {
+			res = (summary.suspicious > 0) ? PESIEVE_DETECTED : PESIEVE_NOT_DETECTED;
+		}
 		delete report;
 		report = nullptr;
 	}
 #ifdef _DEBUG
 	system("pause");
 #endif
-	return 0;
+	return res;
 }
