@@ -1,11 +1,11 @@
 var searchData=
 [
   ['endrva_0',['endRva',['../classpesieve_1_1_patch_list_1_1_patch.html#a76e4354724d121ee95a9d52a1803174f',1,'pesieve::PatchList::Patch']]],
-  ['entropy_1',['entropy',['../structpesieve_1_1_area_stats.html#ad62d613bf732fc822c1ede7e41210a7c',1,'pesieve::AreaStats']]],
+  ['entropy_1',['entropy',['../classpesieve_1_1_area_entropy_stats.html#a82df077a940d6870308d72ba39cbeec2',1,'pesieve::AreaEntropyStats::entropy'],['../structpesieve_1_1_chunk_stats.html#a01f6863702f4dd075086ec44772b751e',1,'pesieve::ChunkStats::entropy']]],
   ['epmodified_2',['epModified',['../classpesieve_1_1_headers_scan_report.html#a8598cb43a88cbeae687cd88e5020715f',1,'pesieve::HeadersScanReport']]],
   ['error_5fcolor_3',['ERROR_COLOR',['../namespacepesieve.html#a890e7a246cf910c9add107f4e56a381a',1,'pesieve']]],
   ['error_5fscan_5ffailure_4',['ERROR_SCAN_FAILURE',['../namespacepesieve.html#a267e690d8ed5004a62be6a7ce04f7617',1,'pesieve.ERROR_SCAN_FAILURE'],['../pe__sieve__types_8h.html#a87242425d02cf0e4f321ee488630ae5d',1,'ERROR_SCAN_FAILURE:&#160;pe_sieve_types.h']]],
-  ['errors_5',['errors',['../structt__report.html#a45916763f69b37148c5120c70ef0b08b',1,'t_report']]],
+  ['errors_5',['errors',['../structreport.html#a224f0d5f3a479c575d2f588a0e7db227',1,'report']]],
   ['errorscount_6',['errorsCount',['../classpesieve_1_1_process_scan_report.html#a7e3ec7b7c894b6fa0f572a2367955ef4',1,'pesieve::ProcessScanReport']]],
   ['eventhandle_7',['EventHandle',['../namespacepesieve_1_1util.html#a60b9a4a2b6b3b508c726b687102996a0',1,'pesieve::util']]],
   ['exceptionparam_8',['ExceptionParam',['../namespacepesieve_1_1util.html#a2f48b0c1e52ab5c08ca7312301fc8543',1,'pesieve::util']]],
