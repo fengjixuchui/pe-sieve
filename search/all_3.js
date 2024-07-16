@@ -46,7 +46,7 @@ var searchData=
   ['convert_5fto_5fwow64_5fpath_43',['convert_to_wow64_path',['../namespacepesieve_1_1util.html#ad385849bc26716edf4e761d67a409c1d',1,'pesieve::util']]],
   ['copy_44',['copy',['../structpesieve_1_1util_1_1_byte_buffer.html#a6cc4e0834e6e770db8f2e7e7d6e8dd5c',1,'pesieve::util::ByteBuffer']]],
   ['count_45',['count',['../classpesieve_1_1_modules_info.html#ac7b2f53996f65bfd5d47932248bcfc6d',1,'pesieve::ModulesInfo']]],
-  ['count_5fhook_5ftypes_46',['COUNT_HOOK_TYPES',['../namespacepesieve.html#a2b1dc083f0bcae84735e71b374c389efa51b6633f3151608047710392eb6b955c',1,'pesieve']]],
+  ['count_5fpatch_5ftypes_46',['COUNT_PATCH_TYPES',['../namespacepesieve.html#aef1981236931c047e3b21059e717ea64a149a04b308455b9c5f5c7359626402f6',1,'pesieve']]],
   ['count_5fsection_5fhdrs_47',['count_section_hdrs',['../namespacepesieve_1_1util.html#ac5c9c8728b3429b9499eb8e0978e33d0',1,'pesieve::util']]],
   ['count_5fworkingset_5fentries_48',['count_workingset_entries',['../namespacepesieve_1_1util.html#a539f415709cc4ca711a41118bed18c1f',1,'pesieve::util']]],
   ['countdumped_49',['countDumped',['../classpesieve_1_1_process_dump_report.html#acd254aea75b8454bda044b23dcc55d6e',1,'pesieve::ProcessDumpReport']]],
@@ -63,5 +63,6 @@ var searchData=
   ['create_5fdir_5frecursively_60',['create_dir_recursively',['../namespacepesieve_1_1util.html#a04f5ff8195f6fd23668379fbd46879dc',1,'pesieve::util']]],
   ['ctx_61',['ctx',['../struct__t__stack__enum__params.html#ae7d2f75acd71c92407abb34baba79e86',1,'_t_stack_enum_params']]],
   ['currarea_62',['currArea',['../classpesieve_1_1_area_multi_stats.html#a48c41baba037ab57bcdc92c1428dee5f',1,'pesieve::AreaMultiStats']]],
-  ['custom_5fmatched_63',['custom_matched',['../classpesieve_1_1_working_set_scan_report.html#a69078211811766e7b0301c8c99417af4',1,'pesieve::WorkingSetScanReport']]]
+  ['custom_5fmatched_63',['custom_matched',['../classpesieve_1_1_working_set_scan_report.html#a69078211811766e7b0301c8c99417af4',1,'pesieve::WorkingSetScanReport']]],
+  ['custom_5fmutex_2eh_64',['custom_mutex.h',['../custom__mutex_8h.html',1,'']]]
 ];

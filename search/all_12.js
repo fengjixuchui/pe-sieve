@@ -44,7 +44,7 @@ var searchData=
   ['set_5fnon_5fsuspicious_41',['set_non_suspicious',['../scanner_8cpp.html#abe4faa4c4347c0bfc6691847fd84a48f',1,'scanner.cpp']]],
   ['set_5fprivilege_42',['set_privilege',['../namespacepesieve_1_1util.html#a56df5353038c000c74a9c1875a989460',1,'pesieve::util']]],
   ['setend_43',['setEnd',['../classpesieve_1_1_patch_list_1_1_patch.html#af34616cf2855636a928dbac68cfae3e0',1,'pesieve::PatchList::Patch']]],
-  ['sethooktarget_44',['setHookTarget',['../classpesieve_1_1_patch_list_1_1_patch.html#adf9a2d02e37e69146ebfd20799077542',1,'pesieve::PatchList::Patch']]],
+  ['sethooktarget_44',['setHookTarget',['../classpesieve_1_1_patch_list_1_1_patch.html#a0ef11444af2c99e07e5db6e97c598734',1,'pesieve::PatchList::Patch']]],
   ['sethooktargetinfo_45',['setHookTargetInfo',['../classpesieve_1_1_patch_list_1_1_patch.html#a7995c01369861207268c6d18f6ed3934',1,'pesieve::PatchList::Patch']]],
   ['setmzpe_46',['setMzPe',['../classpesieve_1_1_artefact_scanner.html#a6a6ecf4776e495b05b1407605280d8b8',1,'pesieve::ArtefactScanner']]],
   ['setntfilehdr_47',['setNtFileHdr',['../classpesieve_1_1_artefact_scanner.html#a732749d6a208c45fad90e07f0c6da609',1,'pesieve::ArtefactScanner']]],
@@ -104,5 +104,6 @@ var searchData=
   ['summarize_101',['summarize',['../classpesieve_1_1_area_entropy_stats.html#a55525d7498ddf04738ce1fac9332be3f',1,'pesieve::AreaEntropyStats::summarize()'],['../structpesieve_1_1_chunk_stats.html#ac68e19c8316bf003c2fbdea739176001',1,'pesieve::ChunkStats::summarize()'],['../classpesieve_1_1_area_multi_stats.html#adc0566558c7de4604692be9fec9ba0e3',1,'pesieve::AreaMultiStats::summarize()'],['../classpesieve_1_1_area_stats.html#a5b449d535857a37328518f752ab2f610',1,'pesieve::AreaStats::summarize()']]],
   ['suspicious_102',['suspicious',['../structreport.html#a5ee5e4dbcf6777455b2b32b1529d4980',1,'report']]],
   ['switchtowow64path_103',['switchToWow64Path',['../classpesieve_1_1_module_data.html#a2e919f44d71aad97bb40a77086c28e7b',1,'pesieve::ModuleData']]],
-  ['szmodname_104',['szModName',['../classpesieve_1_1_module_data.html#ab7463bd2db1ce6343e1be66600c48cd8',1,'pesieve::ModuleData']]]
+  ['symbols_104',['symbols',['../classpesieve_1_1_process_scanner.html#ac9a6ee9cd3632a5ccd3f03742700959f',1,'pesieve::ProcessScanner']]],
+  ['szmodname_105',['szModName',['../classpesieve_1_1_module_data.html#ab7463bd2db1ce6343e1be66600c48cd8',1,'pesieve::ModuleData']]]
 ];
