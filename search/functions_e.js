@@ -28,9 +28,11 @@ var searchData=
   ['printall_25',['printAll',['../classpesieve_1_1stats_1_1_std_deviation_calc.html#a30164389d06677204e9e3b0f445bba1d',1,'pesieve::stats::StdDeviationCalc']]],
   ['printbanner_26',['printBanner',['../class_p_esieve_params.html#a329838ce31e84c366fa8df6451decf00',1,'PEsieveParams']]],
   ['printfoundiats_27',['printFoundIATs',['../classpesieve_1_1_imp_reconstructor.html#a59ee43ece887d2d3f8e44d12e96c32ea',1,'pesieve::ImpReconstructor']]],
-  ['processdumpreport_28',['ProcessDumpReport',['../classpesieve_1_1_process_dump_report.html#ad0827416439dc6cc1a105a938244e236',1,'pesieve::ProcessDumpReport']]],
-  ['processfeaturescanner_29',['ProcessFeatureScanner',['../classpesieve_1_1_process_feature_scanner.html#adeebfab417cce25451dde92fd6066bc5',1,'pesieve::ProcessFeatureScanner']]],
-  ['processscanner_30',['ProcessScanner',['../classpesieve_1_1_process_scanner.html#a417b205292393e667d95cd7b881159d2',1,'pesieve::ProcessScanner']]],
-  ['processscanreport_31',['ProcessScanReport',['../classpesieve_1_1_process_scan_report.html#a2dd00994d97a975dbfbe3b5e6c743552',1,'pesieve::ProcessScanReport']]],
-  ['processsymbolsmanager_32',['ProcessSymbolsManager',['../class_process_symbols_manager.html#a1c3c5d102a2565dc5a4793de5b8c3b89',1,'ProcessSymbolsManager']]]
+  ['printresolvedaddr_28',['printResolvedAddr',['../classpesieve_1_1_thread_scanner.html#ac35db3f1ec2765f9dda550b04f0cb9ee',1,'pesieve::ThreadScanner']]],
+  ['printthreadinfo_29',['printThreadInfo',['../classpesieve_1_1_thread_scanner.html#a75c0be0ec6ea82b700f3ca5e846a0675',1,'pesieve::ThreadScanner']]],
+  ['processdumpreport_30',['ProcessDumpReport',['../classpesieve_1_1_process_dump_report.html#ad0827416439dc6cc1a105a938244e236',1,'pesieve::ProcessDumpReport']]],
+  ['processfeaturescanner_31',['ProcessFeatureScanner',['../classpesieve_1_1_process_feature_scanner.html#adeebfab417cce25451dde92fd6066bc5',1,'pesieve::ProcessFeatureScanner']]],
+  ['processscanner_32',['ProcessScanner',['../classpesieve_1_1_process_scanner.html#a417b205292393e667d95cd7b881159d2',1,'pesieve::ProcessScanner']]],
+  ['processscanreport_33',['ProcessScanReport',['../classpesieve_1_1_process_scan_report.html#a2dd00994d97a975dbfbe3b5e6c743552',1,'pesieve::ProcessScanReport']]],
+  ['processsymbolsmanager_34',['ProcessSymbolsManager',['../class_process_symbols_manager.html#a12daa79c985a492c117fff26451434f3',1,'ProcessSymbolsManager']]]
 ];
